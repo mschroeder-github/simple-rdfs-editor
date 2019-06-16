@@ -1,11 +1,8 @@
 # Simple RDFS Editor
 
-You are also overwhelmed by [Protégé](https://protege.stanford.edu/)'s graphical user interface?
-You do not need the expressiveness of [OWL](https://www.w3.org/TR/owl-ref/)?
-You just want to create an [RDFS](https://www.w3.org/TR/rdf-schema/) ontology, maybe while talking with
-your [subject-matter expert](https://en.wikipedia.org/wiki/Subject-matter_expert)?
-
-Then, this open-source tool called Simple RDFS Editor, written in Java 8, is just the right tool for you.
+[Protégé](https://protege.stanford.edu/) is a powerful and commonly used editor to create and maintain [OWL](https://www.w3.org/TR/owl-ref/) ontologies. However, as soon as one would like to model less expressive [RDFS](https://www.w3.org/TR/rdf-schema/) ontologies, Protégé offers too many features where most of them are not needed and which rather tend to distract ontology engineers in designing simple ontologies.
+That is why I decided to implement Simple RDFS Editor which is a simplified editor just to met the requirements for creating and maintaining RDFS ontologies.
+It is open-source, written in Java 8 and currently in the alpha phase.
 
 ![Screenshot](img/main.png)
 
