@@ -1,0 +1,209 @@
+<#import "macros.html" as m />
+
+<@m.page title="${sessionId} | Simple RDFS Editor" needVue=true>
+
+<script type="text/x-template" id="item-template">
+    <li v-if="!(item.type === 'Datatype' && treeType === 'Domain')">
+    
+    <a :href="fulluri()" @click="clicked($event)" draggable="true" v-on:dragstart="dragstart($event)" v-on:dragover="dragover($event)" v-on:drop="drop(treeType, item, ontology, $event)">
+    
+    <span v-if="item.localname === undefined">
+        <img src="/img/ontology.png" /> {{ ontology.prefix }}
+    </span>
+    <span v-else>
+        <img src="/img/class.png" v-if="item.type === 'Class'"/>
+        <img src="/img/property.png" v-if="item.type === 'Property'"/>     
+        <img src="/img/datatype.png" v-if="item.type === 'Datatype'"/>
+        
+        <span v-if="item.imported">{{ item.prefix }}:</span>{{ item.localname }}
+    </span>
+
+    <span v-if="item.type === 'Property'" style="color: lightgray;">
+        -
+        <span v-if="item.domain && item.domain.localname">{{item.domain.localname}}</span><span v-else>&empty;</span>
+        :
+        <span v-if="item.range && item.range.localname">{{item.range.localname}}</span><span v-else>&empty;</span>
+    </span>
+    </a>
+
+    <span v-if="(!isRoot && ontologyIndex === 0) || (isRoot && !ontology.isUser)" class="float-right" @click="remove()"><i class="fa fa-trash-alt"></i></span>
+
+    <ul class="resource-tree">
+        <tree-item    v-for="(child, index) in item.children"  :ontology-index="ontologyIndex"  :tree-type="treeType"  :type="type"    :is-root="false"    :ontology="ontology"    :key="index"    :item="child"></tree-item>
+    </ul>
+</li>
+</script>
+
+<div id="app">
+
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <span class="navbar-brand">sRDFSe</span>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" data-toggle="dropdown" href="#">Session</a>
+                    <div class="dropdown-menu">
+                        <div class="custom-file dropdown-item">
+                            <input type="file" class="custom-file-input" id="uploadFile" ref="uploadFile" v-on:change="uploadFile()" accept=".ttl">
+                            <label class="custom-file-label" for="uploadFile"><i class="fa fa-upload" title="Upload"></i></label>
+                        </div>
+
+                        <a class="dropdown-item" href="/download/${sessionId}" target="_blank"><i class="fa fa-download"></i> Download</a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item" href="" onclick="deleteSession(location.href, event)"><i class="fa fa-trash"></i> Close</a>
+                    </div>
+                </li>
+
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" data-toggle="dropdown" href="#">Edit</a>
+                    <div class="dropdown-menu">
+                        <a class="dropdown-item" href="" @click="newResource('Class', $event)"><img src="/img/class.png" > New Class</a>
+                        <a class="dropdown-item" href="" @click="newResource('Property', $event)"><img src="/img/property.png" > New Property</a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item" href="" @click="reset('Domain', $event)"><img src="/img/domain.png"> Reset Domain</a>
+                        <a class="dropdown-item" href="" @click="reset('Range', $event)"><img src="/img/range.png"> Reset Range</a>
+                    </div>
+                </li>
+
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" data-toggle="dropdown" href="#">Import</a>
+                    <div class="dropdown-menu">
+                        <div class="custom-file dropdown-item">
+                            <input type="file" class="custom-file-input" id="importFile" ref="importFile" v-on:change="importFile()" accept=".ttl">
+                            <label class="custom-file-label" for="uploadFile"><i class="fa fa-upload" title="Upload"></i></label>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item" href="" title="XML Schema Definition" @click="importPreset('/vocab/xsd.ttl', $event)"><i class="fa fa-file-import"></i> XSD</a>
+                        <a class="dropdown-item" href="" title="Friend-Of-A-Friend" @click="importPreset('/vocab/foaf.ttl', $event)"><i class="fa fa-file-import"></i> FOAF</a>
+                        <a class="dropdown-item" href="" title="DC Terms" @click="importPreset('/vocab/dcterms.ttl', $event)"><i class="fa fa-file-import"></i> DC Terms</a>
+                    </div>
+                </li>
+
+                <!--a class="nav-item nav-link" href="#">File</a>
+                <a class="nav-item nav-link" href="#">Edit</a>
+                <a class="nav-item nav-link" href="#">Import</a-->
+                <!-- i class="fa fa-angle-left"></i> Back -->
+            </ul>
+        </div>
+
+        &nbsp;
+        &nbsp;
+        <div class="input-group">
+            <div class="input-group-prepend">
+                <span class="input-group-text">
+                    Share-Link:
+                </span>
+            </div>
+            <input readonly type="text" class="form-control" value="${selfhref}" editable="false" onfocus="this.select();"/>
+            <div class="input-group-append">
+                <div v-if="connected" class="input-group-text alert-success float-right" >
+                    Connected
+                </div>
+                <button v-if="!connected" class="btn btn-warning float-right" onclick="location.reload()">
+                    Disconnected
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <br/>
+
+    <div v-if="state">
+
+        <div class="row">
+            <div class="col-2">
+                <input type="text" class="form-control" placeholder="Prefix" v-model="state.ontologies[0].prefix" @change="prefixChanged()"/>
+            </div>
+            <div class="col">
+                <input type="text" class="form-control" placeholder="Ontology URI" v-model="state.ontologies[0].uri" @change="uriChanged()"/>
+            </div>
+        </div>
+
+        <br/>
+        <div class="row">
+            <div class="col">
+                <div class="row">
+                    <div class="col">
+                        <div class="input-group">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text">
+                                    <img src="/img/class.png" v-if="res.type === 'Class'"/>
+                                    <img src="/img/property.png" v-if="res.type === 'Property'"/>
+                                    &nbsp;
+                                    {{ res.type }}
+                                </span>
+                            </div>
+                            <input v-bind:readonly="(res !== undefined && (res.ontologyIndex > 0 || res.imported))" type="text" id="localname" class="form-control maininput" v-on:input="input('localname')" v-on:keydown.enter="createResource()" placeholder="Localname" v-model="res.localname" v-bind:class="{ inactive: !res.hashCode }" @change="changed('localname')"/>
+                            <div class="input-group-append">
+                                <button class="btn btn-outline-secondary" type="button" tabindex="-1" @click="newResource('Class')" title="New Class"><img src="/img/class.png" /></button>
+                            </div>
+                            <div class="input-group-append">
+                                <button class="btn btn-outline-secondary" type="button" tabindex="-1" @click="newResource('Property')" title="New Property"><img src="/img/property.png" /></button>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <input v-bind:readonly="(res !== undefined && res.ontologyIndex > 0)" type="text" id="label" ref="label" class="form-control maininput" v-on:input="input('label')" v-on:keydown.enter="createResource()" placeholder="Label" v-model="res.label[lang]" v-bind:class="{ inactive: !res.hashCode }" @change="changed('label')"/>
+                        </div>
+                        <div class="input-group">
+                            <textarea ref="comment" v-bind:readonly="(res !== undefined && res.ontologyIndex > 0)" class="form-control maininput" placeholder="Comment" rows="3" v-model="res.comment[lang]" v-on:keyup.ctrl.enter="createResource()" v-bind:class="{ inactive: !res.hashCode }" @change="changed('comment')"></textarea>
+                        </div>
+                        <div class="input-group">
+                            <select class="form-control" v-model="lang">
+                                <option value=""></option>
+                                <option value="en">en</option>
+                                <option value="de">de</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 small d-none d-lg-block">
+                <b>Shortcuts</b><br/>
+                Localname, Label: <code>enter</code> creates and focuses resource<br/>
+                Comment: <code>ctrl + enter</code> creates and focuses resource<br/>
+                <b>Tree</b><br/>
+                sub*Of relation: drag&drop resource in same tree<br/>
+                import: drag&drop imported resource on user ontology<br/>
+                domain/range assertion: drag&drop class on property<br/>
+                property creation: drag&drop domain on range<br/>
+            </div>
+        </div>
+
+        <br/>
+        <div class="row">
+            <div class="col-4">
+                <div class="border rounded tree-border">
+                    <a href="" class="tree-link" @click="newResource('Class', $event)"><img src="/img/domain.png" /> Domain</a>
+                    <ul class="resource-tree">
+                        <tree-item v-for="(ontology, index) in state.ontologies" v-bind:key="ontology.prefix" :ontology-index="index" :ontology="ontology" :item="ontology.classes" :is-root="true" :type="'Class'" :tree-type="'Domain'"></tree-item>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="border rounded tree-border">
+                    <a href="" class="tree-link" @click="newResource('Property', $event)"><img src="/img/property.png" /> Properties</a>
+                    <ul class="resource-tree">
+                        <tree-item v-for="(ontology, index) in state.ontologies" v-bind:key="ontology.prefix" :ontology-index="index" :ontology="ontology" :item="ontology.properties" :is-root="true" :type="'Property'" :tree-type="'Property'"></tree-item>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="border rounded tree-border">
+                    <a href="" class="tree-link" @click="newResource('Class', $event)"><img src="/img/range.png" /> Range</a>
+                    <ul class="resource-tree">
+                        <tree-item v-for="(ontology, index) in state.ontologies" v-bind:key="ontology.prefix" :ontology-index="index" :ontology="ontology" :item="ontology.classes" :is-root="true" :type="'Class'" :tree-type="'Range'"></tree-item>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    vm.$mount('#app');
+</script>
+
+</@m.page>

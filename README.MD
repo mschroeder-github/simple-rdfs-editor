@@ -6,6 +6,13 @@ It is open-source, written in Java 8 and currently in the alpha phase.
 
 ![Screenshot](img/main.png)
 
+## Online Version
+
+There is an online version running at http://srdfse.markus-projects.net/ .
+It is implemented with [Vue.js](https://vuejs.org/), [Spark Java](http://sparkjava.com/) and Websockets.
+
+![Screenshot](img/screenshot-online.png)
+
 ## Tutorial: how to use the tool
 
 In this section I cover all features of the tool and how you use them.

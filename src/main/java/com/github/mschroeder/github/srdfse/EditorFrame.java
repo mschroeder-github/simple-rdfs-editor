@@ -31,6 +31,7 @@ import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JTree;
+import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
 import static javax.swing.TransferHandler.MOVE;
 import javax.swing.event.DocumentEvent;
@@ -45,6 +46,8 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.text.CaseUtils;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 /**
  *
@@ -75,10 +78,10 @@ public class EditorFrame extends javax.swing.JFrame {
 
     {
         try {
-            ontologyIcon = new ImageIcon(ImageIO.read(EditorFrame.class.getResourceAsStream("/icon/ontology.png")));
-            classIcon = new ImageIcon(ImageIO.read(EditorFrame.class.getResourceAsStream("/icon/class.png")));
-            propertyIcon = new ImageIcon(ImageIO.read(EditorFrame.class.getResourceAsStream("/icon/property.png")));
-            datatypeIcon = new ImageIcon(ImageIO.read(EditorFrame.class.getResourceAsStream("/icon/datatype.png")));
+            ontologyIcon = new ImageIcon(ImageIO.read(EditorFrame.class.getResourceAsStream("/web/img/ontology.png")));
+            classIcon = new ImageIcon(ImageIO.read(EditorFrame.class.getResourceAsStream("/web/img/class.png")));
+            propertyIcon = new ImageIcon(ImageIO.read(EditorFrame.class.getResourceAsStream("/web/img/property.png")));
+            datatypeIcon = new ImageIcon(ImageIO.read(EditorFrame.class.getResourceAsStream("/web/img/datatype.png")));
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
@@ -142,7 +145,7 @@ public class EditorFrame extends javax.swing.JFrame {
         loadUserOntology(ont);
     }
 
-    private void loadUserOntology(Ontology onto) {
+    /*package*/ void loadUserOntology(Ontology onto) {
         newButton(Resource.Type.Class, noevt());
 
         //the one which is created by the user
@@ -155,39 +158,43 @@ public class EditorFrame extends javax.swing.JFrame {
 
         getTrees().forEach(jtree -> SwingUtility.expandAll(jtree));
     }
-    
-    private void importOntologyFromResource(String resourcePath) {
+
+    /*package*/ void importOntologyFromResource(String resourcePath) {
         String basename = FilenameUtils.getBaseName(resourcePath);
-        
+
         Model m = ModelFactory.createDefaultModel().read(
                 EditorFrame.class.getResourceAsStream(resourcePath),
                 null,
                 "TTL"
         );
-        
+
         Ontology onto = new Ontology();
         onto.setPrefix(basename);
-        
+
         Ontology.load(onto, m);
-        
+
         importOntology(onto);
     }
-    
-    private void importOntology(Ontology onto) {
+
+    /*package*/ void importOntology(Ontology onto) {
         //no duplicate
-        for(int i = 0; i < ontologies.size(); i++) {
-            if(ontologies.get(i).getPrefix().equals(onto.getPrefix())) {
+        for (int i = 0; i < ontologies.size(); i++) {
+            if (ontologies.get(i).getPrefix().equals(onto.getPrefix())) {
                 return;
             }
         }
-        
+
         ontologies.add(onto);
         fireEvents(OntologyTreeModel.Modification.Inserted, onto);
-        
+
         getTrees().forEach(jtree -> SwingUtility.expandAll(jtree));
     }
 
     private void initFilechooser() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            return;
+        }
+
         jFileChooserLoad.addChoosableFileFilter(new FileFilter() {
             @Override
             public boolean accept(File f) {
@@ -256,7 +263,7 @@ public class EditorFrame extends javax.swing.JFrame {
     private Resource getSelectedResource() {
         return selected;
     }
-    
+
     private class OntologyCellRenderer extends DefaultTreeCellRenderer {
 
         @Override
@@ -285,42 +292,42 @@ public class EditorFrame extends javax.swing.JFrame {
                 StringBuilder sb = new StringBuilder();
                 sb.append("<html>");
                 sb.append(resource.getLocalname(true));
-                
+
                 sb.append("<font color=gray>");
-                
+
                 sb.append(" : ");
-                
-                if(resource.hasDomain()) {
+
+                if (resource.hasDomain()) {
                     sb.append(resource.getDomain().getLocalname());
                 } else {
                     sb.append(EMPTY);
                 }
-                
+
                 sb.append(" - ");
-                
-                if(resource.hasRange()) {
+
+                if (resource.hasRange()) {
                     sb.append(resource.getRange().getLocalname());
                 } else {
                     sb.append(EMPTY);
                 }
                 sb.append("</font>");
-                
+
                 sb.append("</html>");
-                
+
                 label.setText(sb.toString());
                 label.setIcon(propertyIcon);
             } else if (resource.getType() == Resource.Type.Datatype) {
                 label.setText(resource.getLocalname(true));
                 label.setIcon(datatypeIcon);
             }
-            
-            if(hasSelected()) {
+
+            if (hasSelected()) {
                 Resource property = getSelectedResource();
-                if(jtree == jTreeDomain && property.hasDomain() && property.getDomain() == resource) {
+                if (jtree == jTreeDomain && property.hasDomain() && property.getDomain() == resource) {
                     label.setOpaque(true);
                     label.setBackground(domainRangeColor);
                 }
-                if(jtree == jTreeRange && property.hasRange() && property.getRange() == resource) {
+                if (jtree == jTreeRange && property.hasRange() && property.getRange() == resource) {
                     label.setOpaque(true);
                     label.setBackground(domainRangeColor);
                 }
@@ -345,7 +352,7 @@ public class EditorFrame extends javax.swing.JFrame {
         }
     }
 
-    private Ontology getUserOntology() {
+    /*package*/ Ontology getUserOntology() {
         return ontologies.get(0);
     }
 
@@ -355,10 +362,16 @@ public class EditorFrame extends javax.swing.JFrame {
 
     private void updateTypeLabel() {
         jLabelType.setText(selectedType.toString());
-        switch(selectedType) {
-            case Class: jLabelType.setIcon(classIcon); break;
-            case Property: jLabelType.setIcon(propertyIcon); break;
-            case Datatype: jLabelType.setIcon(datatypeIcon); break;
+        switch (selectedType) {
+            case Class:
+                jLabelType.setIcon(classIcon);
+                break;
+            case Property:
+                jLabelType.setIcon(propertyIcon);
+                break;
+            case Datatype:
+                jLabelType.setIcon(datatypeIcon);
+                break;
         }
     }
 
@@ -380,7 +393,7 @@ public class EditorFrame extends javax.swing.JFrame {
         } else {
             jCheckBoxSync.setEnabled(false);
         }
-        
+
         jTextFieldLocalname.setBackground(c);
         jTextFieldLabel.setBackground(c);
         jTextAreaComment.setBackground(c);
@@ -388,7 +401,7 @@ public class EditorFrame extends javax.swing.JFrame {
         jTextFieldLocalname.setEditable(true);
         jTextFieldLabel.setEditable(true);
         jTextAreaComment.setEditable(true);
-        
+
         if (hasSelected()) {
             jTextFieldLocalname.setText(selected.getLocalname());
             jTextFieldLabel.setText(selected.getLabel().get((String) jComboBoxLabelLang.getSelectedItem()));
@@ -396,10 +409,10 @@ public class EditorFrame extends javax.swing.JFrame {
 
             jTreeDomain.repaint();
             jTreeRange.repaint();
-            
+
             updateTypeLabel(selected.getType());
-            
-            if(selected.getOntology() != getUserOntology()) {
+
+            if (selected.getOntology() != getUserOntology()) {
                 jTextFieldLocalname.setEditable(false);
                 jTextFieldLabel.setEditable(false);
                 jTextAreaComment.setEditable(false);
@@ -717,6 +730,7 @@ public class EditorFrame extends javax.swing.JFrame {
 
     }
 
+    //called by TargetSourceTransferHandler.importData
     private void dragAndDrop(JTree sourceTree, TreePath[] sources, JTree targetTree, TreePath target) {
         //System.out.println("src: " + Arrays.toString(sources));
         //System.out.println("target: " + target);
@@ -725,106 +739,177 @@ public class EditorFrame extends javax.swing.JFrame {
             Object src = source.getLastPathComponent();
             Object trg = target.getLastPathComponent();
 
-            //property creation
-            if(sourceTree == jTreeDomain && targetTree == jTreeRange &&
-               src instanceof Resource && trg instanceof Resource) {
-                Resource domain = (Resource) src;
-                Resource range = (Resource) trg;
-                
-                Resource property = new Resource(getUserOntology(), Resource.Type.Property);
-                property.setLocalname("has" + range.getLocalname());
-                property.getLabel().put((String)jComboBoxLabelLang.getSelectedItem(), "has " + range.getLocalname());
-                
-                property.setDomain(domain);
-                property.setRange(range);
-                
-                getUserOntology().getRootProperties().add(property);
+            dragAndDrop(sourceTree, src, targetTree, trg, true);
+        }
+    }
+
+    //called by tree-based and Server-based dragAndDrop
+    //src and trg can be Resource or Ontology instance
+    private void dragAndDrop(JTree sourceTree, Object src, JTree targetTree, Object trg, boolean guiEvents) {
+        //property creation
+        if (sourceTree == jTreeDomain && targetTree == jTreeRange
+                && src instanceof Resource && trg instanceof Resource) {
+            Resource domain = (Resource) src;
+            Resource range = (Resource) trg;
+
+            Resource property = new Resource(getUserOntology(), Resource.Type.Property);
+            property.setLocalname("has" + range.getLocalname());
+            property.getLabel().put((String) jComboBoxLabelLang.getSelectedItem(), "has " + range.getLocalname());
+
+            property.setDomain(domain);
+            property.setRange(range);
+
+            getUserOntology().getRootProperties().add(property);
+            
+            if(guiEvents) {
                 fireEvents(OntologyTreeModel.Modification.Inserted, property);
                 expandPaths(getUserOntology());
                 updateSelected(property);
-                
-                continue;
             }
             
-            //set domain
-            if(sourceTree == jTreeDomain && targetTree == jTreeProperties && 
-               src instanceof Resource && trg instanceof Resource) {
-                Resource domain = (Resource) src;
-                Resource property = (Resource) trg;
-                if(property.getOntology() == getUserOntology()) {
-                    property.setDomain(domain);
-                    updateSelected(property);
-                }
-            } 
-            
-            //set domain
-            if(sourceTree == jTreeRange && targetTree == jTreeProperties &&
-               src instanceof Resource && trg instanceof Resource) {
-                Resource range = (Resource) src;
-                Resource property = (Resource) trg;
-                if(property.getOntology() == getUserOntology()) {
-                    property.setRange(range);
+            return;
+        }
+
+        //set domain
+        if (sourceTree == jTreeDomain && targetTree == jTreeProperties
+                && src instanceof Resource && trg instanceof Resource) {
+            Resource domain = (Resource) src;
+            Resource property = (Resource) trg;
+            if (property.getOntology() == getUserOntology()) {
+                property.setDomain(domain);
+                if(guiEvents) {
                     updateSelected(property);
                 }
             }
-                    
-            
-            if (src == trg || src instanceof Ontology) {
-                continue;
+        }
+
+        //set range
+        if (sourceTree == jTreeRange && targetTree == jTreeProperties
+                && src instanceof Resource && trg instanceof Resource) {
+            Resource range = (Resource) src;
+            Resource property = (Resource) trg;
+            if (property.getOntology() == getUserOntology()) {
+                property.setRange(range);
+                if(guiEvents) {
+                    updateSelected(property);
+                }
+            }
+        }
+
+        if (src == trg || src instanceof Ontology) {
+            return;
+        }
+
+        Resource srcR = (Resource) src;
+
+        //resource -> ontology (maybe import)
+        //target can only be user ontology
+        if (trg instanceof Ontology && trg == getUserOntology() && sourceTree == targetTree) {
+            Ontology trgO = (Ontology) trg;
+            boolean sameOnto = trgO == srcR.getOntology();
+
+            if (sameOnto) {
+                removeResource(srcR, guiEvents);
+            } else {
+                //it's an import (copy resource)
+                srcR = srcR.copyOnlyRef();
             }
 
-            Resource srcR = (Resource) src;
+            trgO.getRoot(srcR.getType()).add(srcR);
             
-            //target can only be user ontology
-            if (trg instanceof Ontology && trg == getUserOntology() && sourceTree == targetTree) {
-                Ontology trgO = (Ontology) trg;
-                boolean sameOnto = trgO == srcR.getOntology();
-
-                if (sameOnto) {
-                    removeResource(srcR);
-                } else {
-                    //it's an import (copy resource)
-                    srcR = srcR.copyOnlyRef();
-                }
-                
-                trgO.getRoot(srcR.getType()).add(srcR);
+            if(guiEvents) {
                 fireEvents(OntologyTreeModel.Modification.Inserted, srcR);
                 expandPaths(srcR);
             }
+            
+        } //target is a resource
+        else if (trg instanceof Resource
+                && (((Resource) trg).getOntology() == getUserOntology() || ((Resource) trg).isImported())
+                && sourceTree == targetTree) {
+            Resource trgR = (Resource) trg;
 
-            //target is a resource
-            else if (trg instanceof Resource && 
-                     (((Resource) trg).getOntology() == getUserOntology() || ((Resource) trg).isImported()) && 
-                    sourceTree == targetTree) {
-                Resource trgR = (Resource) trg;
+            removeResource(srcR, guiEvents);
 
-                removeResource(srcR);
-
-                trgR.addChild(srcR);
+            trgR.addChild(srcR);
+            
+            if(guiEvents) {
                 fireEvents(OntologyTreeModel.Modification.Inserted, srcR);
             }
+        }
 
+        if(guiEvents) {
             expandPaths(trg);
         }
     }
 
-    private void removeResource(Resource srcR) {
+    //called by Server Websocket messageDragAndDrop
+    /*package*/ void dragAndDrop(String srcTreeType, int srcHashCode, String dstTreeType, int dstHashCode) {
+        JTree sourceTree = getTree(TreeType.valueOf(srcTreeType));
+        JTree targetTree = getTree(TreeType.valueOf(dstTreeType));
+        
+        Object src = getObjectByHashCode(srcHashCode);
+        if(src == null)
+            throw new RuntimeException("No src object found for hashCode " + srcHashCode);
+        
+        Object dst = getObjectByHashCode(dstHashCode);
+        if(dst == null)
+            throw new RuntimeException("No dst object found for hashCode " + dstHashCode);
+        
+        dragAndDrop(sourceTree, src, targetTree, dst, false);
+    }
+    
+    /*package*/ Object getObjectByHashCode(int hashCode) {
+        for(Ontology onto : ontologies) {
+            if(onto.hashCode() == hashCode)
+                return onto;
+            
+            Resource res = onto.findByHashCode(hashCode);
+            if(res != null)
+                return res;
+        }
+        return null;
+    }
+    
+    /* package */ void removeOntology(Ontology onto) {
+        ontologies.remove(onto);
+    }
+
+    private void removeResource(Resource srcR, boolean guiEvents) {
         List<OntologyTreeModel> sourceModels = getModels(srcR.getType());
 
+        //create it before manipulation
         List<TreeModelEvent> events = sourceModels.stream().map(sm -> sm.toEvent(srcR)).collect(toList());
 
         if (srcR.hasParent()) {
             srcR.getParent().removeChild(srcR);
         } else {
             Ontology onto = srcR.isImported() ? getUserOntology() : srcR.getOntology();
-            
+
             onto.getRoot(srcR.getType()).remove(srcR);
         }
 
         //because we can have two: in case of 'class' we have domain and range
-        for (int i = 0; i < events.size(); i++) {
-            sourceModels.get(i).fireEvent(OntologyTreeModel.Modification.Removed, events.get(i));
+        if(guiEvents) {
+            for (int i = 0; i < events.size(); i++) {
+                sourceModels.get(i).fireEvent(OntologyTreeModel.Modification.Removed, events.get(i));
+            }
         }
+    }
+
+    public JSONObject toJSON() {
+        JSONObject json = new JSONObject();
+
+        JSONArray ontoArray = new JSONArray();
+        int index = 0;
+        for (Ontology ontology : ontologies) {
+            JSONObject onto = ontology.toJSON(index);
+            onto.put("isUser", index == 0);
+            onto.put("index", index++);
+            ontoArray.put(onto);
+        }
+        json.put("ontologies", ontoArray);
+
+        return json;
     }
 
     @SuppressWarnings("unchecked")
@@ -1175,7 +1260,7 @@ public class EditorFrame extends javax.swing.JFrame {
         jMenuEdit.setText("Edit");
 
         jMenuItemNewClass.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_K, java.awt.event.InputEvent.CTRL_MASK));
-        jMenuItemNewClass.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icon/class.png"))); // NOI18N
+        jMenuItemNewClass.setIcon(new javax.swing.ImageIcon(getClass().getResource("/web/img/class.png"))); // NOI18N
         jMenuItemNewClass.setText("New Class");
         jMenuItemNewClass.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -1185,7 +1270,7 @@ public class EditorFrame extends javax.swing.JFrame {
         jMenuEdit.add(jMenuItemNewClass);
 
         jMenuItemNewProp.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_B, java.awt.event.InputEvent.CTRL_MASK));
-        jMenuItemNewProp.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icon/property.png"))); // NOI18N
+        jMenuItemNewProp.setIcon(new javax.swing.ImageIcon(getClass().getResource("/web/img/property.png"))); // NOI18N
         jMenuItemNewProp.setText("New Property");
         jMenuItemNewProp.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -1354,40 +1439,40 @@ public class EditorFrame extends javax.swing.JFrame {
     }//GEN-LAST:event_jMenuItemFOAFActionPerformed
 
     private void jMenuItemDCTActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItemDCTActionPerformed
-        importOntologyFromResource("/vocab/dct.ttl");
+        importOntologyFromResource("/vocab/dcterms.ttl");
     }//GEN-LAST:event_jMenuItemDCTActionPerformed
 
     private void jTreeKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_jTreeKeyPressed
-        if(evt.getKeyCode() == KeyEvent.VK_DELETE) {
+        if (evt.getKeyCode() == KeyEvent.VK_DELETE) {
             JTree jtree = (JTree) evt.getSource();
             TreePath selected = jtree.getSelectionPath();
-            if(selected != null) {
+            if (selected != null) {
                 Object obj = selected.getLastPathComponent();
-                if(obj instanceof Resource) {
-                    Resource res = (Resource)obj;
-                    if(res == this.selected) {
+                if (obj instanceof Resource) {
+                    Resource res = (Resource) obj;
+                    if (res == this.selected) {
                         newButton(res.getType(), noevt());
                     }
-                    if(res.getOntology() == getUserOntology() || res.isImported()) {
-                        removeResource(res);
+                    if (res.getOntology() == getUserOntology() || res.isImported()) {
+                        removeResource(res, true);
                     }
-                } else if(obj instanceof Ontology && obj != getUserOntology()) {
+                } else if (obj instanceof Ontology && obj != getUserOntology()) {
                     fireEvents(OntologyTreeModel.Modification.Removed, obj);
-                    ontologies.remove((Ontology)obj);
+                    ontologies.remove((Ontology) obj);
                 }
             }
         }
     }//GEN-LAST:event_jTreeKeyPressed
 
     private void jMenuItemResetDomainActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItemResetDomainActionPerformed
-        if(hasSelected() && selected.getType() == Resource.Type.Property) {
+        if (hasSelected() && selected.getType() == Resource.Type.Property) {
             selected.setDomain(null);
             updateSelected();
         }
     }//GEN-LAST:event_jMenuItemResetDomainActionPerformed
 
     private void jMenuItemResetRangeActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItemResetRangeActionPerformed
-        if(hasSelected() && selected.getType() == Resource.Type.Property) {
+        if (hasSelected() && selected.getType() == Resource.Type.Property) {
             selected.setRange(null);
             updateSelected();
         }

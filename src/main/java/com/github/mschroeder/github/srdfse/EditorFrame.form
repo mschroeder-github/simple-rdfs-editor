@@ -72,7 +72,7 @@
                   <KeyStroke key="Ctrl+K"/>
                 </Property>
                 <Property name="icon" type="javax.swing.Icon" editor="org.netbeans.modules.form.editors2.IconEditor">
-                  <Image iconType="3" name="/icon/class.png"/>
+                  <Image iconType="3" name="/web/img/class.png"/>
                 </Property>
                 <Property name="text" type="java.lang.String" value="New Class"/>
               </Properties>
@@ -86,7 +86,7 @@
                   <KeyStroke key="Ctrl+B"/>
                 </Property>
                 <Property name="icon" type="javax.swing.Icon" editor="org.netbeans.modules.form.editors2.IconEditor">
-                  <Image iconType="3" name="/icon/property.png"/>
+                  <Image iconType="3" name="/web/img/property.png"/>
                 </Property>
                 <Property name="text" type="java.lang.String" value="New Property"/>
               </Properties>

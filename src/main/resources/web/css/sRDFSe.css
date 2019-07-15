@@ -1,0 +1,36 @@
+
+.inactive {
+    background-color: #f8f9fa !important; /*f5f5ff*/
+}
+
+.maininput::placeholder {
+    color: #afbecb;
+}
+
+.resource-tree {
+    list-style-type: none;
+    padding-left: 20px;
+}
+
+.resource-tree li {
+    cursor: pointer;
+}
+
+.tree-border {
+    padding: 10px;
+    overflow-x: auto;
+    border-color: rgb(206, 212, 218);
+    height: calc(100vh - 420px);
+}
+
+.tree-link {
+    color: rgb(33, 37, 41);
+}
+
+.tree-link:hover {
+    color: rgb(33, 37, 41);
+}
+
+.tree-link:active {
+    color: rgb(33, 37, 41);
+}

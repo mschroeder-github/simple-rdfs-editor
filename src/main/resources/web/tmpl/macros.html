@@ -1,0 +1,53 @@
+<#macro page title needVue>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="/css/bootstrap.min.css" rel="stylesheet" />
+        <link href="/css/all.min.css" rel="stylesheet" />
+        <link href="/css/sRDFSe.css" rel="stylesheet" />
+
+        <!-- script src="/js/bootstrap.bundle.min.js" ></script -->
+        <script src="/js/jquery-3.4.1.js"></script>
+        <script src="/js/popper.js" ></script>
+        <script src="/js/bootstrap.js" ></script>
+        
+        <#if needVue>
+            <script src="/js/vue.js" ></script>
+            <script src="/js/vue-native-websocket.js" ></script>
+            <script src="/js/sRDFSe.js" ></script>
+        </#if>
+
+        <link rel="icon" href="/favicon.ico" type="image/x-icon">
+        
+        <title>${title?html}</title>
+    </head>
+    <body>
+        <div class="container">
+            <div class="row">
+                <div class="col">
+                    <#nested/>
+                    
+                    <div style="background: white; font-size: 12px;" class="fixed-bottom">
+                        &nbsp;
+
+                        &copy; 2019 <a target="_blank" href="https://www.dfki.de"><img src="/img/DFKI_Logo.jpg" style="height: 12px;"/></a>
+
+                        &nbsp;
+                        &nbsp;
+                        <a target="_blank" href="https://www.dfki.de/web/legal-info-de">Impressum</a> /
+                        <a target="_blank" href="https://www.dfki.de/web/legal-info-en">Legal Info</a>
+                        &nbsp;
+                        &nbsp;
+                        <a target="_blank" href="http://www.dfki.uni-kl.de/datenschutz/data-protection-de.html">Datenschutzerklärung</a> /
+                        <a target="_blank" href="http://www.dfki.uni-kl.de/datenschutz/data-protection-en.html">Data Protection Notice</a>
+                    </div>
+                    
+                </div>
+            </div>
+
+        </div>
+    </body>
+</html>
+</#macro>
+

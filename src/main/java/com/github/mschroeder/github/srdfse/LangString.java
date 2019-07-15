@@ -1,6 +1,7 @@
 package com.github.mschroeder.github.srdfse;
 
 import java.util.HashMap;
+import org.json.JSONObject;
 
 /**
  *
@@ -16,6 +17,12 @@ public class LangString extends HashMap<String, String> {
         return this.getOrDefault("en", "") + "@en";
     }
     
-    
+    public JSONObject toJSON() {
+        JSONObject json = new JSONObject();
+        for(Entry<String, String> e : this.entrySet()) {
+            json.put(e.getKey(), e.getValue());
+        }
+        return json;
+    }
     
 }

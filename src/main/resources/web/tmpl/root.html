@@ -1,0 +1,39 @@
+<#import "macros.html" as m />
+
+<@m.page title="Simple RDFS Editor" needVue=false>
+
+<center>
+    <h1>sRDFSe<br/>
+        <small>simple RDFS editor</small>
+    </h1>
+    <br/>
+    A simple collaborative online editor to create RDFS based ontologies.
+    <br/>
+    <br/>
+    <form method="POST" action="/sessions">
+        <button class="btn btn-primary">Create a Session</button>
+    </form>
+
+    <#if session_not_found>
+        <div class="alert alert-warning" role="alert">
+            The session was not found.
+        </div>
+    </#if>
+    
+    <#if session_closed>
+        <div class="alert alert-warning" role="alert">
+            The session was closed.
+        </div>
+    </#if>
+    
+    <br/>
+    <br/>
+    <br/>
+    <a href="https://github.com/mschroeder-github/simple-rdfs-editor" target="_blank">Code@Github</a>
+    &nbsp;
+    &nbsp;
+    <a href="http://www.dfki.uni-kl.de/~mschroeder/" target="_blank">Author</a>
+    
+</center>
+
+</@m.page>
