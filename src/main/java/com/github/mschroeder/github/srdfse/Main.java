@@ -9,7 +9,7 @@ public class Main {
         if(args.length > 0 && args[0].equals("server")) {
             Server server = new Server(args);
         } else {
-            EditorFrame.showGUI(args);
+            EditorPanelFrame.showGUI(args);
         }
     }
 }

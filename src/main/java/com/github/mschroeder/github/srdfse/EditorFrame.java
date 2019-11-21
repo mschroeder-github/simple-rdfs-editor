@@ -52,7 +52,10 @@ import org.json.JSONObject;
 /**
  *
  * @author Markus Schr&ouml;der
+ * @deprecated 2019-11-21 use {@link EditorPanelFrame} because now 
+ * {@link EditorPanel} can be used stand-alone
  */
+@Deprecated
 public class EditorFrame extends javax.swing.JFrame {
 
     private List<Ontology> ontologies;
