@@ -40,6 +40,7 @@ public class Ontology {
 
     private String uri;
     private String prefix;
+    private String name;
 
     private List<Resource> rootClasses;
     private List<Resource> rootProperties;
@@ -87,6 +88,14 @@ public class Ontology {
         this.prefix = prefix;
     }
 
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+    
     @Override
     public String toString() {
         return prefix;

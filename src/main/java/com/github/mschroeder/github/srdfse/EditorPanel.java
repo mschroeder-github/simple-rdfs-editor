@@ -118,7 +118,8 @@ public class EditorPanel extends javax.swing.JPanel {
         ontologies.add(onto);
         jTextFieldOntoURI.setText(getUserOntology().getUri());
         jTextFieldPrefix.setText(getUserOntology().getPrefix());
-
+        jTextFieldName.setText(getUserOntology().getName());
+        
         getModels().forEach(m -> m.fireEvent(OntologyTreeModel.Modification.Structure, onto));
 
         getTrees().forEach(jtree -> SwingUtility.expandAll(jtree));
@@ -183,6 +184,10 @@ public class EditorPanel extends javax.swing.JPanel {
         }
     }
     
+    public Ontology getUserOntology() {
+        return ontologies.get(0);
+    }
+    
     public JSONObject toJSON() {
         JSONObject json = new JSONObject();
 
@@ -197,6 +202,10 @@ public class EditorPanel extends javax.swing.JPanel {
         json.put("ontologies", ontoArray);
 
         return json;
+    }
+    
+    public void setOntoUriEditable(boolean editable) {
+        jTextFieldOntoURI.setEditable(editable);
     }
     
     //private
@@ -220,6 +229,9 @@ public class EditorPanel extends javax.swing.JPanel {
         jTextFieldPrefix.getDocument().addDocumentListener(SwingUtility.getAllListener(c -> {
             getUserOntology().setPrefix(jTextFieldPrefix.getText());
             fireEvents(OntologyTreeModel.Modification.Changed, getUserOntology());
+        }));
+        jTextFieldName.getDocument().addDocumentListener(SwingUtility.getAllListener(c -> {
+            getUserOntology().setName(jTextFieldName.getText());
         }));
 
         jTextFieldLocalname.getDocument().addDocumentListener(SwingUtility.getAllListener(this::localnameChanged));
@@ -370,9 +382,7 @@ public class EditorPanel extends javax.swing.JPanel {
         }
     }
 
-    /*package*/ Ontology getUserOntology() {
-        return ontologies.get(0);
-    }
+    
 
     private boolean hasSelected() {
         return selected != null;
@@ -918,6 +928,8 @@ public class EditorPanel extends javax.swing.JPanel {
         jCheckBoxSync = new javax.swing.JCheckBox();
         jLabel1 = new javax.swing.JLabel();
         jTextFieldPrefix = new javax.swing.JTextField();
+        jLabelName = new javax.swing.JLabel();
+        jTextFieldName = new javax.swing.JTextField();
         jPanelBottom = new javax.swing.JPanel();
         jPanelDomain = new javax.swing.JPanel();
         jLabelDomain = new javax.swing.JLabel();
@@ -991,6 +1003,8 @@ public class EditorPanel extends javax.swing.JPanel {
 
         jLabel1.setText("Prefix");
 
+        jLabelName.setText("Name");
+
         javax.swing.GroupLayout jPanelTopLayout = new javax.swing.GroupLayout(jPanelTop);
         jPanelTop.setLayout(jPanelTopLayout);
         jPanelTopLayout.setHorizontalGroup(
@@ -999,69 +1013,67 @@ public class EditorPanel extends javax.swing.JPanel {
                 .addContainerGap()
                 .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(jPanelTopLayout.createSequentialGroup()
+                        .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                            .addComponent(jLabelComment)
+                            .addComponent(jComboBoxLabelLang, javax.swing.GroupLayout.PREFERRED_SIZE, 72, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(jScrollPaneComment, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(0, 0, Short.MAX_VALUE))
+                    .addGroup(jPanelTopLayout.createSequentialGroup()
                         .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addGroup(jPanelTopLayout.createSequentialGroup()
-                                .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                                    .addComponent(jLabelComment)
-                                    .addComponent(jComboBoxLabelLang, 0, 72, Short.MAX_VALUE))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                                .addComponent(jScrollPaneComment, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                             .addGroup(jPanelTopLayout.createSequentialGroup()
                                 .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                                     .addComponent(jLabelLocalname)
                                     .addComponent(jLabelLabel))
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                                 .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                                    .addComponent(jTextFieldLabel, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, 243, Short.MAX_VALUE)
-                                    .addComponent(jTextFieldLocalname, javax.swing.GroupLayout.Alignment.TRAILING)
-                                    .addGroup(jPanelTopLayout.createSequentialGroup()
-                                        .addComponent(jTextFieldPrefix, javax.swing.GroupLayout.PREFERRED_SIZE, 56, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                        .addComponent(jLabelOntoURI))))
-                            .addGroup(jPanelTopLayout.createSequentialGroup()
-                                .addComponent(jLabelType, javax.swing.GroupLayout.PREFERRED_SIZE, 142, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addComponent(jTextFieldLabel, javax.swing.GroupLayout.Alignment.TRAILING)
+                                    .addComponent(jTextFieldLocalname, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 243, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jLabelOntoURI)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                                .addComponent(jTextFieldOntoURI))
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanelTopLayout.createSequentialGroup()
+                                .addComponent(jCheckBoxSync)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jLabelType, javax.swing.GroupLayout.PREFERRED_SIZE, 75, javax.swing.GroupLayout.PREFERRED_SIZE)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                                 .addComponent(jButtonNewClass, javax.swing.GroupLayout.PREFERRED_SIZE, 84, javax.swing.GroupLayout.PREFERRED_SIZE)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jButtonNewProp, javax.swing.GroupLayout.PREFERRED_SIZE, 84, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(jCheckBoxSync)
-                        .addGap(0, 0, Short.MAX_VALUE))
-                    .addGroup(jPanelTopLayout.createSequentialGroup()
-                        .addComponent(jLabel1)
-                        .addGap(194, 194, 194)
-                        .addComponent(jTextFieldOntoURI)))
-                .addContainerGap())
+                                .addComponent(jButtonNewProp, javax.swing.GroupLayout.PREFERRED_SIZE, 84, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jLabel1)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jTextFieldPrefix, javax.swing.GroupLayout.PREFERRED_SIZE, 56, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jLabelName)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jTextFieldName)))
+                        .addContainerGap())))
         );
         jPanelTopLayout.setVerticalGroup(
             jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanelTopLayout.createSequentialGroup()
                 .addContainerGap()
-                .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(jPanelTopLayout.createSequentialGroup()
-                        .addComponent(jTextFieldOntoURI, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(18, 18, 18))
-                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanelTopLayout.createSequentialGroup()
-                        .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                            .addComponent(jLabel1)
-                            .addComponent(jTextFieldPrefix, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(jLabelOntoURI))
-                        .addGap(18, 18, 18)))
                 .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jButtonNewProp)
                     .addComponent(jButtonNewClass)
+                    .addComponent(jCheckBoxSync)
+                    .addComponent(jLabel1)
+                    .addComponent(jTextFieldPrefix, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jLabelName)
+                    .addComponent(jTextFieldName, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(jLabelType, javax.swing.GroupLayout.PREFERRED_SIZE, 25, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(10, 10, 10)
-                .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addGroup(jPanelTopLayout.createSequentialGroup()
-                        .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                            .addComponent(jTextFieldLocalname, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(jLabelLocalname))
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jLabelLabel)
-                            .addComponent(jTextFieldLabel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                    .addComponent(jCheckBoxSync, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 44, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jTextFieldLocalname, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jLabelLocalname)
+                    .addComponent(jLabelOntoURI)
+                    .addComponent(jTextFieldOntoURI, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(jLabelLabel)
+                    .addComponent(jTextFieldLabel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(jPanelTopLayout.createSequentialGroup()
@@ -1091,7 +1103,7 @@ public class EditorPanel extends javax.swing.JPanel {
         jPanelDomain.setLayout(jPanelDomainLayout);
         jPanelDomainLayout.setHorizontalGroup(
             jPanelDomainLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jLabelDomain, javax.swing.GroupLayout.DEFAULT_SIZE, 211, Short.MAX_VALUE)
+            .addComponent(jLabelDomain, javax.swing.GroupLayout.DEFAULT_SIZE, 206, Short.MAX_VALUE)
             .addComponent(jTextFieldDomainFilter)
             .addComponent(jScrollPaneDomain)
         );
@@ -1102,7 +1114,7 @@ public class EditorPanel extends javax.swing.JPanel {
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jTextFieldDomainFilter, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPaneDomain, javax.swing.GroupLayout.DEFAULT_SIZE, 201, Short.MAX_VALUE)
+                .addComponent(jScrollPaneDomain, javax.swing.GroupLayout.DEFAULT_SIZE, 232, Short.MAX_VALUE)
                 .addGap(0, 0, 0))
         );
 
@@ -1125,7 +1137,7 @@ public class EditorPanel extends javax.swing.JPanel {
         jPanelProperties.setLayout(jPanelPropertiesLayout);
         jPanelPropertiesLayout.setHorizontalGroup(
             jPanelPropertiesLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jLabelProperties, javax.swing.GroupLayout.DEFAULT_SIZE, 211, Short.MAX_VALUE)
+            .addComponent(jLabelProperties, javax.swing.GroupLayout.DEFAULT_SIZE, 206, Short.MAX_VALUE)
             .addComponent(jTextFieldPropertiesFilter)
             .addComponent(jScrollPaneProperties)
         );
@@ -1136,7 +1148,7 @@ public class EditorPanel extends javax.swing.JPanel {
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jTextFieldPropertiesFilter, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPaneProperties, javax.swing.GroupLayout.DEFAULT_SIZE, 201, Short.MAX_VALUE))
+                .addComponent(jScrollPaneProperties, javax.swing.GroupLayout.DEFAULT_SIZE, 232, Short.MAX_VALUE))
         );
 
         jPanelBottom.add(jPanelProperties);
@@ -1158,7 +1170,7 @@ public class EditorPanel extends javax.swing.JPanel {
         jPanelRange.setLayout(jPanelRangeLayout);
         jPanelRangeLayout.setHorizontalGroup(
             jPanelRangeLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jLabelRange, javax.swing.GroupLayout.DEFAULT_SIZE, 211, Short.MAX_VALUE)
+            .addComponent(jLabelRange, javax.swing.GroupLayout.DEFAULT_SIZE, 206, Short.MAX_VALUE)
             .addComponent(jTextFieldRangeFilter)
             .addComponent(jScrollPaneRange)
         );
@@ -1169,7 +1181,7 @@ public class EditorPanel extends javax.swing.JPanel {
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jTextFieldRangeFilter, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPaneRange, javax.swing.GroupLayout.DEFAULT_SIZE, 201, Short.MAX_VALUE))
+                .addComponent(jScrollPaneRange, javax.swing.GroupLayout.DEFAULT_SIZE, 232, Short.MAX_VALUE))
         );
 
         jPanelBottom.add(jPanelRange);
@@ -1184,9 +1196,9 @@ public class EditorPanel extends javax.swing.JPanel {
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
-                .addComponent(jPanelTop, javax.swing.GroupLayout.PREFERRED_SIZE, 217, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addComponent(jPanelTop, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jPanelBottom, javax.swing.GroupLayout.DEFAULT_SIZE, 247, Short.MAX_VALUE))
+                .addComponent(jPanelBottom, javax.swing.GroupLayout.DEFAULT_SIZE, 278, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
 
@@ -1293,6 +1305,7 @@ public class EditorPanel extends javax.swing.JPanel {
     private javax.swing.JLabel jLabelDomain;
     private javax.swing.JLabel jLabelLabel;
     private javax.swing.JLabel jLabelLocalname;
+    private javax.swing.JLabel jLabelName;
     private javax.swing.JLabel jLabelOntoURI;
     private javax.swing.JLabel jLabelProperties;
     private javax.swing.JLabel jLabelRange;
@@ -1310,6 +1323,7 @@ public class EditorPanel extends javax.swing.JPanel {
     private javax.swing.JTextField jTextFieldDomainFilter;
     private javax.swing.JTextField jTextFieldLabel;
     private javax.swing.JTextField jTextFieldLocalname;
+    private javax.swing.JTextField jTextFieldName;
     private javax.swing.JTextField jTextFieldOntoURI;
     private javax.swing.JTextField jTextFieldPrefix;
     private javax.swing.JTextField jTextFieldPropertiesFilter;
