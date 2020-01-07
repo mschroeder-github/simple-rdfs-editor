@@ -27,8 +27,10 @@ import org.apache.jena.rdf.model.Property;
 import org.apache.jena.rdf.model.RDFNode;
 import org.apache.jena.rdf.model.ResourceFactory;
 import org.apache.jena.rdf.model.Statement;
+import org.apache.jena.vocabulary.OWL;
 import org.apache.jena.vocabulary.RDF;
 import org.apache.jena.vocabulary.RDFS;
+import org.apache.jena.vocabulary.XSD;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -41,18 +43,49 @@ public class Ontology {
     private String uri;
     private String prefix;
     private String name;
+    private String fragment;
+    private String instanceNamespace;
+    private String instancePrefix;
 
     private List<Resource> rootClasses;
     private List<Resource> rootProperties;
 
+    private List<Link> inverseOf;
+    
     public Ontology() {
-        this.prefix = "ex";
-        this.uri = "http://example.com/ex/";
+        this.prefix = "";
+        this.uri = "";
+        this.fragment = "";
+        this.name = "";
+        this.instanceNamespace = "";
+        this.instancePrefix = "";
 
         rootClasses = new ArrayList<>();
         rootProperties = new ArrayList<>();
+        inverseOf = new ArrayList<>();
     }
 
+    public void addInverseOf(Resource source, Resource target) {
+        inverseOf.add(new Link(source, target));
+    }
+    
+    public void removeInverseOf(Resource res) {
+        for(Link link : inverseOf.toArray(new Link[0])) {
+            if(link.getSource().equals(res) || link.getTarget().equals(res)) {
+                inverseOf.remove(link);
+            }
+        }
+    }
+    
+    public Resource getInverseOf(Resource res) {
+        for(Link link : inverseOf.toArray(new Link[0])) {
+            if(link.getSource().equals(res)) {
+                return link.getTarget();
+            }
+        }
+        return null;
+    }
+    
     public List<Resource> getRoot(Resource.Type type) {
         if (type == Resource.Type.Class) {
             return getRootClasses();
@@ -76,6 +109,10 @@ public class Ontology {
         return uri;
     }
 
+    public String getUriWithFragment() {
+        return uri + getFragment();
+    }
+
     public void setUri(String uri) {
         this.uri = uri;
     }
@@ -94,6 +131,33 @@ public class Ontology {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getFragment() {
+        if (fragment == null) {
+            return "";
+        }
+        return fragment;
+    }
+
+    public void setFragment(String fragment) {
+        this.fragment = fragment;
+    }
+
+    public String getInstanceNamespace() {
+        return instanceNamespace;
+    }
+
+    public void setInstanceNamespace(String instanceNamespace) {
+        this.instanceNamespace = instanceNamespace;
+    }
+
+    public String getInstancePrefix() {
+        return instancePrefix;
+    }
+
+    public void setInstancePrefix(String instancePrefix) {
+        this.instancePrefix = instancePrefix;
     }
     
     @Override
@@ -145,7 +209,8 @@ public class Ontology {
         //guess prefix from file name
         onto.setPrefix(FilenameUtils.getBaseName(file.getName()));
 
-        load(onto, m);
+        loadTBox(onto, m);
+        loadABox(onto, m);
 
         return onto;
     }
@@ -154,38 +219,59 @@ public class Ontology {
         Ontology onto = new Ontology();
 
         Model m = ModelFactory.createDefaultModel();
-        
+
         m.read(is, null, "TURTLE");
-        
+
         //guess prefix from file name
         onto.setPrefix(FilenameUtils.getBaseName(filename));
 
-        load(onto, m);
+        loadTBox(onto, m);
+        loadABox(onto, m);
 
         return onto;
     }
-    
-    public static void load(Ontology onto, Model m) {
+
+    //from model to onto
+    public static void loadTBox(Ontology onto, Model m) {
         Map<String, String> prefixMap = m.getNsPrefixMap();
         //try find full uri in file
         String uri = prefixMap.get(onto.getPrefix());
         if (uri != null) {
             onto.setUri(uri);
+
+            //cleanup fragment
+            if (uri.endsWith("/") || uri.endsWith("#")) {
+                onto.setUri(uri.substring(0, uri.length() - 1));
+                onto.setFragment(uri.substring(uri.length() - 1, uri.length()));
+            }
         }
+
+        Map<org.apache.jena.rdf.model.Resource, Resource> mapped = new HashMap<>();
+
+        //for each mapping
         Map<String, Ontology> prefix2onto = new HashMap<>();
         for (Entry<String, String> mapping : prefixMap.entrySet()) {
+
+            //put prefix to onto
             Ontology other;
             if (mapping.getKey().equals(onto.getPrefix())) {
                 other = onto;
             } else {
+                //create for the prefix an ontology (e.g. xsd)
                 other = new Ontology();
                 other.setPrefix(mapping.getKey());
                 other.setUri(mapping.getValue());
+
+                if (other.getPrefix().equals("xsd")) {
+                    initXSD(mapped, other);
+                }
+                if (other.getPrefix().equals("rdfs")) {
+                    initRDFSLiteral(mapped, other);
+                }
             }
             prefix2onto.put(mapping.getKey(), other);
         }
 
-        Map<org.apache.jena.rdf.model.Resource, Resource> mapped = new HashMap<>();
         Set<Resource> rootClasses = new HashSet<>();
         Set<Resource> rootProps = new HashSet<>();
 
@@ -197,14 +283,80 @@ public class Ontology {
         addRelations(m, RDFS.subPropertyOf, mapped, rootProps, SpecialRelation.Sub);
         addRelations(m, RDFS.domain, mapped, rootProps, SpecialRelation.Domain);
         addRelations(m, RDFS.range, mapped, rootProps, SpecialRelation.Range);
-
+        
         onto.rootClasses.addAll(rootClasses);
         onto.rootProperties.addAll(rootProps);
 
         Collections.sort(onto.rootClasses);
         Collections.sort(onto.rootProperties);
+        
+        loadInverseOf(onto, m);
     }
 
+    //load tbox beforehand
+    public static void loadABox(Ontology onto, Model m) {
+        
+        //List<org.apache.jena.rdf.model.Resource> jenaInstances = new ArrayList<>(); 
+        
+        Map<String, Resource> uri2resource = onto.getUri2ResourceMap();
+        
+        Map<org.apache.jena.rdf.model.Resource, Resource> jena2res = new HashMap<>();
+        
+        //types
+        for(Statement stmt : m.listStatements(null, RDF.type, (RDFNode) null).toList()) {
+            if(!stmt.getObject().isResource())
+                continue;
+            
+            Resource clazz = uri2resource.get(stmt.getObject().asResource().getURI());
+            if(clazz != null && clazz.getType() == Resource.Type.Class) {
+                
+                String ns = stmt.getSubject().getNameSpace();
+                String instPrefix = m.getNsURIPrefix(ns);
+                if(instPrefix != null) {
+                    onto.setInstanceNamespace(ns);
+                    onto.setInstancePrefix(instPrefix);
+                }
+                
+                Resource inst = toResource(stmt.getSubject(), m, onto, Resource.Type.Instance, null);
+                clazz.addInstance(inst);
+                
+                jena2res.put(stmt.getSubject(), inst);
+            }
+        }
+        
+        //for all collected instances
+        for(org.apache.jena.rdf.model.Resource jenaInstance : jena2res.keySet()) {
+            
+            Resource subj = jena2res.get(jenaInstance);
+            
+            for(Statement triple : m.listStatements(jenaInstance, null, (RDFNode) null).toList()) {
+                Resource prop = uri2resource.get(triple.getPredicate().getURI());
+                
+                if(prop == null)
+                    continue;
+                
+                //literal case
+                if(triple.getObject().isLiteral()) {
+                    Resource literal = new Resource(onto, Resource.Type.Literal);
+                    literal.getComment().put("", triple.getObject().asLiteral().getLexicalForm());
+                    
+                    prop.addLink(subj, literal);
+                    continue;
+                }
+
+                //resource case
+                if(!triple.getObject().isResource())
+                    continue;
+                
+                Resource obj  = jena2res.get(triple.getObject().asResource());
+                
+                if(prop != null && obj != null) {
+                    prop.addLink(subj, obj);
+                }
+            }
+        }
+    }
+    
     private static void addResouces(Model m, org.apache.jena.rdf.model.Resource typeResource, Resource.Type type, Ontology onto, Map<org.apache.jena.rdf.model.Resource, Resource> mapped, Set<Resource> roots, Map<String, Ontology> prefix2onto) {
         for (org.apache.jena.rdf.model.Resource jena : m.listSubjectsWithProperty(RDF.type, typeResource).toList()) {
             Resource res = toResource(jena, m, onto, type, prefix2onto);
@@ -246,7 +398,7 @@ public class Ontology {
     private static Resource toResource(org.apache.jena.rdf.model.Resource jenaRes, Model model, Ontology onto, Resource.Type type, Map<String, Ontology> prefix2onto) {
         String prefix = model.getNsURIPrefix(jenaRes.getNameSpace());
 
-        Ontology trgOnto = prefix2onto.get(prefix);
+        Ontology trgOnto = prefix2onto == null ? null : prefix2onto.get(prefix);
         if (trgOnto == null) {
             trgOnto = onto;
         }
@@ -282,28 +434,94 @@ public class Ontology {
         return res;
     }
 
-    public void save(File file) {
-        Model m = getModel();
+    private static void loadInverseOf(Ontology onto, Model m) {
+        for(Statement stmt : m.listStatements(null, OWL.inverseOf, (RDFNode) null).toList()) {
+            
+            Resource subj = onto.findByUri(stmt.getSubject().getURI());
+            Resource obj = onto.findByUri(stmt.getObject().asResource().getURI());
+            
+            if(subj != null && obj != null) {
+                onto.addInverseOf(subj, obj);
+            }
+        }
+    }
+    
+    private static void initXSD(Map<org.apache.jena.rdf.model.Resource, Resource> map, Ontology onto) {
+        map.put(XSD.anyURI, new Resource(onto, Resource.Type.Class, "anyURI"));
+        map.put(XSD.base64Binary, new Resource(onto, Resource.Type.Class, "base64Binary"));
+        map.put(XSD.date, new Resource(onto, Resource.Type.Class, "date"));
+        map.put(XSD.dateTime, new Resource(onto, Resource.Type.Class, "dateTime"));
+        map.put(XSD.dateTimeStamp, new Resource(onto, Resource.Type.Class, "dateTimeStamp"));
+        map.put(XSD.dayTimeDuration, new Resource(onto, Resource.Type.Class, "dayTimeDuration"));
+        map.put(XSD.decimal, new Resource(onto, Resource.Type.Class, "decimal"));
+        map.put(XSD.duration, new Resource(onto, Resource.Type.Class, "duration"));
+        map.put(XSD.ENTITIES, new Resource(onto, Resource.Type.Class, "ENTITIES"));
+        map.put(XSD.ENTITY, new Resource(onto, Resource.Type.Class, "ENTITY"));
+        map.put(XSD.gDay, new Resource(onto, Resource.Type.Class, "gDay"));
+        map.put(XSD.gMonth, new Resource(onto, Resource.Type.Class, "gMonth"));
+        map.put(XSD.gMonthDay, new Resource(onto, Resource.Type.Class, "gMonthDay"));
+        map.put(XSD.gYear, new Resource(onto, Resource.Type.Class, "gYear"));
+        map.put(XSD.gYearMonth, new Resource(onto, Resource.Type.Class, "gYearMonth"));
+        map.put(XSD.hexBinary, new Resource(onto, Resource.Type.Class, "hexBinary"));
+        map.put(XSD.ID, new Resource(onto, Resource.Type.Class, "ID"));
+        map.put(XSD.IDREF, new Resource(onto, Resource.Type.Class, "IDREF"));
+        map.put(XSD.IDREFS, new Resource(onto, Resource.Type.Class, "IDREFS"));
+        map.put(XSD.integer, new Resource(onto, Resource.Type.Class, "integer"));
+        map.put(XSD.language, new Resource(onto, Resource.Type.Class, "language"));
+        map.put(XSD.Name, new Resource(onto, Resource.Type.Class, "Name"));
+        map.put(XSD.NCName, new Resource(onto, Resource.Type.Class, "NCName"));
+        map.put(XSD.negativeInteger, new Resource(onto, Resource.Type.Class, "negativeInteger"));
+        map.put(XSD.NMTOKEN, new Resource(onto, Resource.Type.Class, "NMTOKEN"));
+        map.put(XSD.NMTOKENS, new Resource(onto, Resource.Type.Class, "NMTOKENS"));
+        map.put(XSD.nonNegativeInteger, new Resource(onto, Resource.Type.Class, "nonNegativeInteger"));
+        map.put(XSD.nonPositiveInteger, new Resource(onto, Resource.Type.Class, "nonPositiveInteger"));
+        map.put(XSD.normalizedString, new Resource(onto, Resource.Type.Class, "normalizedString"));
+        map.put(XSD.NOTATION, new Resource(onto, Resource.Type.Class, "NOTATION"));
+        map.put(XSD.positiveInteger, new Resource(onto, Resource.Type.Class, "positiveInteger"));
+        map.put(XSD.QName, new Resource(onto, Resource.Type.Class, "QName"));
+        map.put(XSD.time, new Resource(onto, Resource.Type.Class, "time"));
+        map.put(XSD.token, new Resource(onto, Resource.Type.Class, "token"));
+        map.put(XSD.unsignedByte, new Resource(onto, Resource.Type.Class, "unsignedByte"));
+        map.put(XSD.unsignedInt, new Resource(onto, Resource.Type.Class, "unsignedInt"));
+        map.put(XSD.unsignedLong, new Resource(onto, Resource.Type.Class, "unsignedLong"));
+        map.put(XSD.unsignedShort, new Resource(onto, Resource.Type.Class, "unsignedShort"));
+        map.put(XSD.xboolean, new Resource(onto, Resource.Type.Class, "boolean"));
+        map.put(XSD.xbyte, new Resource(onto, Resource.Type.Class, "byte"));
+        map.put(XSD.xdouble, new Resource(onto, Resource.Type.Class, "double"));
+        map.put(XSD.xfloat, new Resource(onto, Resource.Type.Class, "float"));
+        map.put(XSD.xint, new Resource(onto, Resource.Type.Class, "int"));
+        map.put(XSD.xlong, new Resource(onto, Resource.Type.Class, "long"));
+        map.put(XSD.xshort, new Resource(onto, Resource.Type.Class, "short"));
+        map.put(XSD.xstring, new Resource(onto, Resource.Type.Class, "string"));
+        map.put(XSD.yearMonthDuration, new Resource(onto, Resource.Type.Class, "yearMonthDuration"));
+    }
+    
+    private static void initRDFSLiteral(Map<org.apache.jena.rdf.model.Resource, Resource> map, Ontology onto) {
+        map.put(RDFS.Literal, new Resource(onto, Resource.Type.Class, "Literal"));
+    }
 
+    public void save(File file) {
+        Model union = getTBoxABoxModel();
+        
         try {
-            m.write(new FileOutputStream(file), "TTL", uri);
+            union.write(new FileOutputStream(file), "TTL", uri);
         } catch (FileNotFoundException ex) {
             throw new RuntimeException(ex);
         }
     }
 
     public String toTTL() {
-        Model m = getModel();
+        Model union = getTBoxABoxModel();
 
         StringWriter sw = new StringWriter();
-        m.write(sw, "TTL", uri);
+        union.write(sw, "TTL", uri);
 
         return sw.toString();
     }
 
-    public Model getModel() {
+    public Model getTBoxModel() {
         Model m = ModelFactory.createDefaultModel();
-        m.setNsPrefix(prefix, uri);
+        m.setNsPrefix(prefix, getUriWithFragment());
         m.setNsPrefix("rdf", RDF.getURI());
         m.setNsPrefix("rdfs", RDFS.getURI());
 
@@ -315,6 +533,17 @@ public class Ontology {
         createStatements(rootProperties, m, RDFS.subPropertyOf);
         createResources(resources(rootProperties), RDF.Property, m);
 
+        //inverseOf (use alt + drag&drop)
+        for(Link link : inverseOf) {
+            org.apache.jena.rdf.model.Resource a = ResourceFactory.createResource(link.getSource().getURI());
+            org.apache.jena.rdf.model.Resource b = ResourceFactory.createResource(link.getTarget().getURI());
+            m.add(a, OWL.inverseOf, b);
+        }
+        
+        if(!inverseOf.isEmpty()) {
+            m.setNsPrefix("owl", OWL.NS);
+        }
+        
         return m;
     }
 
@@ -329,10 +558,21 @@ public class Ontology {
         }
     }
 
-    private void createResources(Set<Resource> s, org.apache.jena.rdf.model.Resource type, Model m) {
+    private List<org.apache.jena.rdf.model.Resource> createResources(Set<Resource> s, org.apache.jena.rdf.model.Resource type, Model m) {
+        List<org.apache.jena.rdf.model.Resource> l = new ArrayList<>();
         for (Resource r : s) {
             //collect all referred ontologies
-            m.setNsPrefix(r.getOntology().getPrefix(), r.getOntology().getUri());
+            m.setNsPrefix(r.getOntology().getPrefix(), r.getOntology().getUriWithFragment());
+
+            //domain/range (collect all referred ontologies)
+            if (r.getType() == Resource.Type.Property) {
+                if (r.hasDomain()) {
+                    m.setNsPrefix(r.getDomain().getOntology().getPrefix(), r.getDomain().getOntology().getUriWithFragment());
+                }
+                if (r.hasRange()) {
+                    m.setNsPrefix(r.getRange().getOntology().getPrefix(), r.getRange().getOntology().getUriWithFragment());
+                }
+            }
 
             org.apache.jena.rdf.model.Resource jenaRes = ResourceFactory.createResource(r.getURI());
             m.add(jenaRes, RDF.type, type);
@@ -356,7 +596,10 @@ public class Ontology {
                     m.add(jenaRes, RDFS.range, ResourceFactory.createResource(r.getRange().getURI()));
                 }
             }
+            
+            l.add(jenaRes);
         }
+        return l;
     }
 
     private List<Map.Entry<Resource, Resource>> subRelations(List<Resource> inputList) {
@@ -393,6 +636,60 @@ public class Ontology {
         return s;
     }
 
+    public Model getABoxModel() {
+        Model m = ModelFactory.createDefaultModel();
+        m.setNsPrefix(prefix, getUriWithFragment());
+        m.setNsPrefix(instancePrefix, instanceNamespace);
+        m.setNsPrefix("rdf", RDF.getURI());
+        m.setNsPrefix("rdfs", RDFS.getURI());
+        
+        for (List<Resource> l : Arrays.asList(rootClasses)) {
+            for (Resource r : l) {
+                for (Resource clazz : r.descendants()) {
+                    org.apache.jena.rdf.model.Resource jenaClass = ResourceFactory.createResource(clazz.getURI());
+                    for(Resource inst : clazz.getInstances()) {
+                        createResources(new HashSet<>(Arrays.asList(inst)), jenaClass, m).get(0);
+                    }
+                }
+            }
+        }
+        
+        for (List<Resource> l : Arrays.asList(rootProperties)) {
+            for (Resource r : l) {
+                for (Resource property : r.descendants()) {
+                    
+                    if(property.getLinks().isEmpty())
+                        continue;
+                    
+                    org.apache.jena.rdf.model.Property jenaProperty = ResourceFactory.createProperty(property.getURI());
+                    
+                    for(Link link : property.getLinks()) {
+                        org.apache.jena.rdf.model.Resource jenaInstA = ResourceFactory.createResource(link.getSource().getURI());
+                        
+                        if(link.getTarget().getType() == Resource.Type.Literal) {
+                            
+                            //untyped literal
+                            String literalValue = link.getTarget().getLiteral().get("");
+                            m.add(jenaInstA, jenaProperty, literalValue);
+                            
+                        } else {
+                            org.apache.jena.rdf.model.Resource jenaInstB = ResourceFactory.createResource(link.getTarget().getURI());
+                            m.add(jenaInstA, jenaProperty, jenaInstB);
+                        }
+                    }
+                }
+            }
+        }
+        
+        return m;
+    }
+    
+    public Model getTBoxABoxModel() {
+        Model tbox = getTBoxModel();
+        Model abox = getABoxModel();
+        return ModelFactory.createUnion(tbox, abox);
+    }
+    
     public JSONObject toJSON(int index) {
         JSONObject ontology = new JSONObject();
         ontology.put("uri", uri);
@@ -431,7 +728,7 @@ public class Ontology {
             if (res.hasParent()) {
                 res.getParent().removeChild(res);
             } else {
-                if(res.isImported()) {
+                if (res.isImported()) {
                     this.getRoot(res.getType()).remove(res);
                 } else {
                     res.getOntology().getRoot(res.getType()).remove(res);
@@ -451,5 +748,86 @@ public class Ontology {
             }
         }
         return null;
+    }
+
+    public Resource findClassByLocalname(String localname) {
+        for (List<Resource> l : Arrays.asList(rootClasses)) {
+            for (Resource r : l) {
+                for (Resource desc : r.descendants()) {
+                    if (desc.getLocalname().equals(localname)) {
+                        return desc;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+    
+    public Resource findByUri(String uri) {
+        for (List<Resource> l : Arrays.asList(rootClasses, rootProperties)) {
+            for (Resource r : l) {
+                for (Resource desc : r.descendants()) {
+                    
+                    if (desc.getURI().equals(uri)) {
+                        return desc;
+                    }
+                    
+                    for(Resource inst : desc.getInstances()) {
+                        if (inst.getURI().equals(uri)) {
+                            return inst;
+                        }
+                    }
+                    
+                    for(Link link : desc.getLinks()) {
+                        if (link.getSource().getURI().equals(uri)) {
+                            return link.getSource();
+                        }
+                        if (link.getTarget().getURI().equals(uri)) {
+                            return link.getTarget();
+                        }
+                    }
+                    
+                }
+            }
+        }
+        return null;
+    }
+    
+    public Map<String, Resource> getUri2ResourceMap() {
+        Map<String, Resource> m = new HashMap<>();
+        
+        for (List<Resource> l : Arrays.asList(rootClasses, rootProperties)) {
+            for (Resource r : l) {
+                for (Resource desc : r.descendants()) {
+                    
+                    m.put(desc.getURI(), desc);
+                    
+                    for(Resource inst : desc.getInstances()) {
+                        m.put(inst.getURI(), inst);
+                    }
+                    
+                    for(Link link : desc.getLinks()) {
+                        m.put(link.getSource().getURI(), link.getSource());
+                        m.put(link.getTarget().getURI(), link.getTarget());
+                    }
+                }
+            }
+        }
+        
+        return m;
+    }
+    
+    public void removeLinksHaving(Resource res) {
+        for (List<Resource> l : Arrays.asList(rootProperties)) {
+            for (Resource r : l) {
+                for (Resource prop : r.descendants()) {
+                    for(Link link : prop.getLinks().toArray(new Link[0])) {
+                        if(link.getSource().equals(res) || link.getTarget().equals(res)) {
+                            prop.getLinks().remove(link);
+                        }
+                    }
+                }
+            }
+        }
     }
 }

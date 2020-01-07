@@ -2,9 +2,14 @@ package com.github.mschroeder.github.srdfse;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
+import java.util.Set;
+import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toSet;
+import org.apache.jena.vocabulary.XSD;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -25,7 +30,9 @@ public class Resource implements Comparable<Resource> {
     public enum Type {
         Class,
         Property,
-        Datatype
+        Datatype,
+        Instance,
+        Literal
     }
     
     private Type type;
@@ -37,6 +44,9 @@ public class Resource implements Comparable<Resource> {
     private Ontology ontology;
     private Resource parent;
     private List<Resource> children;
+    
+    private List<Resource> instances; //for class resource having instances
+    private Set<Link> links; //for property assertions
     
     private Resource domain;
     private Resource range;
@@ -53,6 +63,21 @@ public class Resource implements Comparable<Resource> {
         this.label = new LangString();
         this.comment = new LangString();
         this.children = new ArrayList<>();
+        this.instances = new ArrayList<>();
+        this.links = new HashSet<>();
+    }
+    
+    /**
+     * Use this to refer to a localname.
+     * This will be marked as imported.
+     * @param ontology
+     * @param type
+     * @param localname 
+     */
+    public Resource(Ontology ontology, Type type, String localname) {
+        this(ontology, type);
+        this.localname = localname;
+        this.imported = true;
     }
     
     public Resource copyOnlyRef() {
@@ -83,6 +108,26 @@ public class Resource implements Comparable<Resource> {
         child.parent = null;
     }
 
+    public void addInstance(Resource instance) {
+        instances.add(instance);
+        instance.parent = this;
+    }
+    
+    public void removeInstance(Resource instance) {
+        instances.remove(instance);
+        instance.parent = null;
+    }
+    
+    public void addLink(Resource source, Resource target) {
+        links.add(new Link(source, target));
+        
+        
+    }
+    
+    public void removeLink(Resource source, Resource target) {
+        links.remove(new Link(source, target));
+    }
+    
     public String getLocalname() {
         return localname;
     }
@@ -105,14 +150,22 @@ public class Resource implements Comparable<Resource> {
     public LangString getComment() {
         return comment;
     }
+    
+    //we reuse comment
+    public LangString getLiteral() {
+        return comment;
+    }
 
     @Override
     public String toString() {
-        return localname + " '" + label + "'";
+        return label + " " + localname;
     }
 
     public String getURI() {
-        return getOntology().getUri() + localname;
+        if(type == Type.Instance) {
+            return getOntology().getInstanceNamespace() + localname;
+        }
+        return getOntology().getUriWithFragment() + localname;
     }
 
     public Resource getDomain() {
@@ -137,6 +190,13 @@ public class Resource implements Comparable<Resource> {
 
     public boolean hasRange() {
         return range != null;
+    }
+    
+    public boolean isRangeXSD() {
+        if(!hasRange())
+            return false;
+        
+        return getRange().getURI().startsWith(XSD.getURI());
     }
     
     public String getSeeAlso() {
@@ -215,6 +275,30 @@ public class Resource implements Comparable<Resource> {
         return l;
     }
 
+    public List<Resource> getInstances() {
+        return instances;
+    }
+
+    public Set<Link> getLinks() {
+        return links;
+    }
+    
+    public Set<Link> getLinksOfSubject(Resource subject) {
+        return links.stream().filter(l -> l.getSource().equals(subject)).collect(toSet());
+    }
+    
+    public Set<Link> getLinksOfObject(Resource object) {
+        return links.stream().filter(l -> l.getTarget().equals(object)).collect(toSet());
+    }
+    
+    public List<Resource> getObjects(Resource subject) {
+        return getLinksOfSubject(subject).stream().map(l -> l.getTarget()).collect(toList());
+    }
+    
+    public List<Resource> getSubjects(Resource object) {
+        return getLinksOfObject(object).stream().map(l -> l.getSource()).collect(toList());
+    }
+    
     public Ontology getOntology() {
         return ontology;
     }

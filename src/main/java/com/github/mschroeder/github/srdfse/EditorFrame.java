@@ -174,7 +174,7 @@ public class EditorFrame extends javax.swing.JFrame {
         Ontology onto = new Ontology();
         onto.setPrefix(basename);
 
-        Ontology.load(onto, m);
+        Ontology.loadTBox(onto, m);
 
         importOntology(onto);
     }
@@ -973,6 +973,7 @@ public class EditorFrame extends javax.swing.JFrame {
         jMenuItemXSD = new javax.swing.JMenuItem();
         jMenuItemFOAF = new javax.swing.JMenuItem();
         jMenuItemDCT = new javax.swing.JMenuItem();
+        jMenuItemPimoThing = new javax.swing.JMenuItem();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("Simple RDFS Editor");
@@ -1341,6 +1342,14 @@ public class EditorFrame extends javax.swing.JFrame {
         });
         jMenuImport.add(jMenuItemDCT);
 
+        jMenuItemPimoThing.setText("PIMO Thing");
+        jMenuItemPimoThing.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItemPimoThingActionPerformed(evt);
+            }
+        });
+        jMenuImport.add(jMenuItemPimoThing);
+
         jMenuBarMain.add(jMenuImport);
 
         setJMenuBar(jMenuBarMain);
@@ -1489,6 +1498,10 @@ public class EditorFrame extends javax.swing.JFrame {
         }
     }//GEN-LAST:event_jMenuItemImportFromFileActionPerformed
 
+    private void jMenuItemPimoThingActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItemPimoThingActionPerformed
+        importOntologyFromResource("/vocab/thing.ttl");
+    }//GEN-LAST:event_jMenuItemPimoThingActionPerformed
+
     public static void showGUI(String args[]) {
         java.awt.EventQueue.invokeLater(() -> {
             new EditorFrame().setVisible(true);
@@ -1522,6 +1535,7 @@ public class EditorFrame extends javax.swing.JFrame {
     private javax.swing.JMenuItem jMenuItemNew;
     private javax.swing.JMenuItem jMenuItemNewClass;
     private javax.swing.JMenuItem jMenuItemNewProp;
+    private javax.swing.JMenuItem jMenuItemPimoThing;
     private javax.swing.JMenuItem jMenuItemQuit;
     private javax.swing.JMenuItem jMenuItemResetDomain;
     private javax.swing.JMenuItem jMenuItemResetRange;

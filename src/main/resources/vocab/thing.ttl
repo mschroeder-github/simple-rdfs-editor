@@ -1,0 +1,801 @@
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix thing:   <pimo:thing#> .
+
+thing:depicts
+      a       rdf:Property ;
+      rdfs:domain thing:Image ;
+      rdfs:label "depicts" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "depicts" .
+
+thing:sends
+      a       rdf:Property ;
+      rdfs:domain thing:Agent ;
+      rdfs:label "sends" ;
+      rdfs:range thing:Message ;
+      skos:prefLabel "sends" .
+
+thing:Collection
+      a       rdfs:Class ;
+      rdfs:label "Collection" ;
+      rdfs:subClassOf thing:Thing ;
+      skos:prefLabel "Collection" .
+
+thing:isRelated
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "isRelated" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "isRelated" .
+
+thing:hasSubTopic
+      a       rdf:Property ;
+      rdfs:domain thing:Topic ;
+      rdfs:label "hasSubTopic" ;
+      rdfs:range thing:Topic ;
+      skos:prefLabel "hasSubTopic" .
+
+thing:wikiTextMentions
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "wikiTextMentions" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "wikiTextMentions" .
+
+thing:isReceivedBy
+      a       rdf:Property ;
+      rdfs:domain thing:Message ;
+      rdfs:label "isReceivedBy" ;
+      rdfs:range thing:Agent ;
+      skos:prefLabel "isReceivedBy" .
+
+thing:isFundedBy
+      a       rdf:Property ;
+      rdfs:domain thing:Project ;
+      rdfs:label "isFundedBy" ;
+      rdfs:range thing:Agent ;
+      skos:prefLabel "isFundedBy" .
+
+thing:hasPart
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "hasPart" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "hasPart" .
+
+thing:Tool
+      a       rdfs:Class ;
+      rdfs:label "Tool" ;
+      rdfs:subClassOf thing:Thing ;
+      skos:prefLabel "Tool" .
+
+thing:isHomepageOf
+      a       rdf:Property ;
+      rdfs:domain <pimo:informationelement#Webpage> ;
+      rdfs:label "isHomepageOf" ;
+      rdfs:range thing:Website ;
+      rdfs:subPropertyOf thing:isGroundingOccurrenceOf ;
+      skos:prefLabel "isHomepageOf" .
+
+thing:hasSuggestedTopic
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "hasSuggestedTopic" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "hasSuggestedTopic" .
+
+thing:isAddressOf
+      a       rdf:Property ;
+      rdfs:domain <pimo:core#Address> ;
+      rdfs:label "isAddressOf" ;
+      rdfs:range thing:Agent ;
+      skos:prefLabel "isAddressOf" .
+
+thing:Building
+      a       rdfs:Class ;
+      rdfs:label "Building" ;
+      rdfs:subClassOf thing:Location ;
+      skos:prefLabel "Building" .
+
+thing:hasAggregatedTopic
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "hasAggregatedTopic" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "hasAggregatedTopic" .
+
+thing:Media
+      a       rdfs:Class ;
+      rdfs:label "Media" ;
+      rdfs:subClassOf thing:Thing ;
+      skos:prefLabel "Media" .
+
+thing:hasOrganizer
+      a       rdf:Property ;
+      rdfs:domain thing:SocialEvent ;
+      rdfs:label "hasOrganizer" ;
+      rdfs:range thing:Agent ;
+      skos:prefLabel "hasOrganizer" .
+
+thing:Country
+      a       rdfs:Class ;
+      rdfs:label "Country" ;
+      rdfs:subClassOf thing:Location ;
+      skos:prefLabel "Country" .
+
+thing:isCachedOccurrenceOf
+      a       rdf:Property ;
+      rdfs:domain <pimo:informationelement#InformationElement> ;
+      rdfs:label "isCachedOccurrenceOf" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "isCachedOccurrenceOf" .
+
+thing:hasMember
+      a       rdf:Property ;
+      rdfs:domain thing:Group ;
+      rdfs:label "hasMember" ;
+      rdfs:range thing:Agent ;
+      rdfs:subPropertyOf thing:hasPart ;
+      skos:prefLabel "hasMember" .
+
+thing:isLocationOf
+      a       rdf:Property ;
+      rdfs:domain thing:Location ;
+      rdfs:label "isLocationOf" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "isLocationOf" .
+
+thing:hasTopic
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "hasTopic" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "hasTopic" .
+
+thing:dfasdfasdfasdf
+      a       rdfs:Class ;
+      rdfs:label "dfasdfasdfasdf" ;
+      rdfs:subClassOf thing:Conference ;
+      skos:prefLabel "dfasdfasdfasdf" .
+
+thing:isManagerOf
+      a       rdf:Property ;
+      rdfs:domain thing:Person ;
+      rdfs:label "isManagerOf" ;
+      rdfs:range thing:Group ;
+      rdfs:subPropertyOf thing:isMemberOf ;
+      skos:prefLabel "isManagerOf" .
+
+thing:acronym
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "acronym" ;
+      rdfs:range rdfs:Literal ;
+      skos:prefLabel "acronym" .
+
+thing:creates
+      a       rdf:Property ;
+      rdfs:domain thing:Agent ;
+      rdfs:label "creates" ;
+      rdfs:range thing:Media ;
+      skos:prefLabel "creates" .
+
+thing:Image
+      a       rdfs:Class ;
+      rdfs:label "Image" ;
+      rdfs:subClassOf thing:Media ;
+      skos:prefLabel "Image" .
+
+thing:isMentionedInWikiText
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "isMentionedInWikiText" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "isMentionedInWikiText" .
+
+thing:hasWebsite
+      a       rdf:Property ;
+      rdfs:domain thing:Agent ;
+      rdfs:label "hasWebsite" ;
+      rdfs:range thing:Website ;
+      skos:prefLabel "hasWebsite" .
+
+thing:State
+      a       rdfs:Class ;
+      rdfs:label "State" ;
+      rdfs:subClassOf thing:Location ;
+      skos:prefLabel "State" .
+
+thing:attends
+      a       rdf:Property ;
+      rdfs:domain thing:Agent ;
+      rdfs:label "attends" ;
+      rdfs:range thing:SocialEvent ;
+      rdfs:subPropertyOf thing:isPartOf ;
+      skos:prefLabel "attends" .
+
+thing:Job
+      a       rdfs:Class ;
+      rdfs:label "Job" ;
+      rdfs:subClassOf thing:Thing ;
+      skos:prefLabel "Job" .
+
+thing:hasGroundingOccurrence
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "hasGroundingOccurrence" ;
+      rdfs:range <pimo:informationelement#InformationElement> ;
+      skos:prefLabel "hasGroundingOccurrence" .
+
+thing:receives
+      a       rdf:Property ;
+      rdfs:domain thing:Agent ;
+      rdfs:label "receives" ;
+      rdfs:range thing:Message ;
+      skos:prefLabel "receives" .
+
+thing:wikiTextState
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "wikiTextState" ;
+      rdfs:range rdfs:Literal ;
+      skos:prefLabel "wikiTextState" .
+
+thing:isMemberOf
+      a       rdf:Property ;
+      rdfs:domain thing:Agent ;
+      rdfs:label "isMemberOf" ;
+      rdfs:range thing:Group ;
+      rdfs:subPropertyOf thing:isPartOf ;
+      skos:prefLabel "isMemberOf" .
+
+thing:Thing
+      a       rdfs:Class ;
+      rdfs:label "Thing" ;
+      rdfs:subClassOf rdfs:Resource ;
+      skos:prefLabel "Thing" .
+
+thing:Person
+      a       rdfs:Class ;
+      rdfs:label "Person" ;
+      rdfs:subClassOf thing:Agent ;
+      skos:prefLabel "Person" .
+
+thing:height
+      a       rdf:Property ;
+      rdfs:domain thing:Image ;
+      rdfs:label "height" ;
+      rdfs:range rdfs:Literal ;
+      skos:prefLabel "height" .
+
+thing:isPartOf
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "isPartOf" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "isPartOf" .
+
+thing:hasSubLocation
+      a       rdf:Property ;
+      rdfs:domain thing:Location ;
+      rdfs:label "hasSubLocation" ;
+      rdfs:range thing:Location ;
+      rdfs:subPropertyOf thing:hasPart ;
+      skos:prefLabel "hasSubLocation" .
+
+thing:Website
+      a       rdfs:Class ;
+      rdfs:label "Website" ;
+      rdfs:subClassOf thing:Media ;
+      skos:prefLabel "Website" .
+
+thing:Message
+      a       rdfs:Class ;
+      rdfs:label "Message" ;
+      rdfs:subClassOf thing:Thing ;
+      skos:prefLabel "Message" .
+
+thing:imagequality_score
+      a       rdf:Property ;
+      rdfs:domain thing:Image ;
+      rdfs:label "imagequality_score" ;
+      rdfs:range rdfs:Literal ;
+      skos:prefLabel "imagequality_score" .
+
+thing:lastName
+      a       rdf:Property ;
+      rdfs:domain thing:Person ;
+      rdfs:label "lastName" ;
+      rdfs:range xsd:string ;
+      skos:prefLabel "lastName" .
+
+thing:Room
+      a       rdfs:Class ;
+      rdfs:label "Room" ;
+      rdfs:subClassOf thing:Location ;
+      skos:prefLabel "Room" .
+
+thing:Conference
+      a       rdfs:Class ;
+      rdfs:label "Conference" ;
+      rdfs:subClassOf thing:SocialEvent ;
+      skos:prefLabel "Conference" .
+
+thing:Event
+      a       rdfs:Class ;
+      rdfs:label "Event" ;
+      rdfs:subClassOf thing:Thing ;
+      skos:prefLabel "Event" .
+
+thing:Document
+      a       rdfs:Class ;
+      rdfs:label "Document" ;
+      rdfs:subClassOf thing:Media ;
+      skos:prefLabel "Document" .
+
+thing:Location
+      a       rdfs:Class ;
+      rdfs:label "Location" ;
+      rdfs:subClassOf thing:Thing ;
+      skos:prefLabel "Location" .
+
+thing:isSubcollectionOf
+      a       rdf:Property ;
+      rdfs:domain thing:Collection ;
+      rdfs:label "isSubcollectionOf" ;
+      rdfs:range thing:Collection ;
+      skos:prefLabel "isSubcollectionOf" .
+
+thing:SocialEvent
+      a       rdfs:Class ;
+      rdfs:label "SocialEvent" ;
+      rdfs:subClassOf thing:Event ;
+      skos:prefLabel "SocialEvent" .
+
+thing:sentDate
+      a       rdf:Property ;
+      rdfs:domain thing:Message ;
+      rdfs:label "sentDate" ;
+      rdfs:range xsd:dateTime ;
+      skos:prefLabel "sentDate" .
+
+thing:hasHomepage
+      a       rdf:Property ;
+      rdfs:domain thing:Website ;
+      rdfs:label "hasHomepage" ;
+      rdfs:range <pimo:informationelement#Webpage> ;
+      rdfs:subPropertyOf thing:hasGroundingOccurrence ;
+      skos:prefLabel "hasHomepage" .
+
+thing:isSentBy
+      a       rdf:Property ;
+      rdfs:domain thing:Message ;
+      rdfs:label "isSentBy" ;
+      rdfs:range thing:Agent ;
+      skos:prefLabel "isSentBy" .
+
+thing:hasManager
+      a       rdf:Property ;
+      rdfs:domain thing:Group ;
+      rdfs:label "hasManager" ;
+      rdfs:range thing:Person ;
+      rdfs:subPropertyOf thing:hasMember ;
+      skos:prefLabel "hasManager" .
+
+thing:isAggregatedTopicOf
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "isAggregatedTopicOf" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "isAggregatedTopicOf" .
+
+thing:organizes
+      a       rdf:Property ;
+      rdfs:domain thing:Agent ;
+      rdfs:label "organizes" ;
+      rdfs:range thing:SocialEvent ;
+      skos:prefLabel "organizes" .
+
+thing:funds
+      a       rdf:Property ;
+      rdfs:domain thing:Agent ;
+      rdfs:label "funds" ;
+      rdfs:range thing:Project ;
+      skos:prefLabel "funds" .
+
+thing:Group
+      a       rdfs:Class ;
+      rdfs:label "Group" ;
+      rdfs:subClassOf thing:Agent ;
+      skos:prefLabel "Group" .
+
+thing:hasCachedOccurrence
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "hasCachedOccurrence" ;
+      rdfs:range <pimo:informationelement#InformationElement> ;
+      skos:prefLabel "hasCachedOccurrence" .
+
+thing:isPhotoTakeAtDate
+      a       rdf:Property ;
+      rdfs:domain thing:Image ;
+      rdfs:label "isPhotoTakeAtDate" ;
+      rdfs:range rdfs:Literal ;
+      skos:prefLabel "isPhotoTakeAtDate" .
+
+thing:isInferredTopicOf
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "isInferredTopicOf" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "isInferredTopicOf" .
+
+thing:isDoneBy
+      a       rdf:Property ;
+      rdfs:domain thing:Job ;
+      rdfs:label "isDoneBy" ;
+      rdfs:range thing:Agent ;
+      skos:prefLabel "isDoneBy" .
+
+thing:isPrefImageOf
+      a       rdf:Property ;
+      rdfs:domain thing:Image ;
+      rdfs:label "isPrefImageOf" ;
+      rdfs:range rdfs:Resource ;
+      skos:prefLabel "isPrefImageOf" .
+
+thing:isContainedIn
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "isContainedIn" ;
+      rdfs:range thing:Collection ;
+      rdfs:subPropertyOf thing:isPartOf ;
+      skos:prefLabel "isContainedIn" .
+
+thing:isWebsiteOf
+      a       rdf:Property ;
+      rdfs:domain thing:Website ;
+      rdfs:label "isWebsiteOf" ;
+      rdfs:range thing:Agent ;
+      skos:prefLabel "isWebsiteOf" .
+
+thing:hasAcceptedTopic
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "hasAcceptedTopic" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "hasAcceptedTopic" .
+
+thing:hasSubcollection
+      a       rdf:Property ;
+      rdfs:domain thing:Collection ;
+      rdfs:label "hasSubcollection" ;
+      rdfs:range thing:Collection ;
+      skos:prefLabel "hasSubcollection" .
+
+thing:width
+      a       rdf:Property ;
+      rdfs:domain thing:Image ;
+      rdfs:label "width" ;
+      rdfs:range rdfs:Literal ;
+      skos:prefLabel "width" .
+
+thing:does
+      a       rdf:Property ;
+      rdfs:domain thing:Agent ;
+      rdfs:label "does" ;
+      rdfs:range thing:Job ;
+      skos:prefLabel "does" .
+
+thing:Agent
+      a       rdfs:Class ;
+      rdfs:label "Agent" ;
+      rdfs:subClassOf thing:Thing ;
+      skos:prefLabel "Agent" .
+
+thing:Contract
+      a       rdfs:Class ;
+      rdfs:label "Contract" ;
+      rdfs:subClassOf thing:Document ;
+      skos:prefLabel "Contract" .
+
+thing:hasAddress
+      a       rdf:Property ;
+      rdfs:domain thing:Agent ;
+      rdfs:label "hasAddress" ;
+      rdfs:range <pimo:core#Address> ;
+      skos:prefLabel "hasAddress" .
+
+thing:Email
+      a       rdfs:Class ;
+      rdfs:label "Email" ;
+      rdfs:subClassOf thing:Message , thing:Document ;
+      skos:prefLabel "Email" .
+
+thing:isImageOf
+      a       rdf:Property ;
+      rdfs:domain thing:Image ;
+      rdfs:label "isImageOf" ;
+      rdfs:range rdfs:Resource ;
+      skos:prefLabel "isImageOf" .
+
+thing:wikiText
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "wikiText" ;
+      rdfs:range rdfs:Literal ;
+      skos:prefLabel "wikiText" .
+
+thing:isPhotoTakenAtLocation
+      a       rdf:Property ;
+      rdfs:domain thing:Image ;
+      rdfs:label "isPhotoTakenAtLocation" ;
+      rdfs:range thing:Location ;
+      skos:prefLabel "isPhotoTakenAtLocation" .
+
+thing:isSubLocationOf
+      a       rdf:Property ;
+      rdfs:domain thing:Location ;
+      rdfs:label "isSubLocationOf" ;
+      rdfs:range thing:Location ;
+      rdfs:subPropertyOf thing:isPartOf ;
+      skos:prefLabel "isSubLocationOf" .
+
+thing:hasPrefImage
+      a       rdf:Property ;
+      rdfs:domain rdfs:Resource ;
+      rdfs:label "hasPrefImage" ;
+      rdfs:range thing:Image ;
+      skos:prefLabel "hasPrefImage" .
+
+thing:isEmailAddressOf
+      a       rdf:Property ;
+      rdfs:domain <pimo:core#EmailAddress> ;
+      rdfs:label "isEmailAddressOf" ;
+      rdfs:range thing:Agent ;
+      rdfs:subPropertyOf thing:isAddressOf ;
+      skos:prefLabel "isEmailAddressOf" .
+
+thing:isGroundingOccurrenceOf
+      a       rdf:Property ;
+      rdfs:domain <pimo:informationelement#InformationElement> ;
+      rdfs:label "isGroundingOccurrenceOf" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "isGroundingOccurrenceOf" .
+
+thing:containsThing
+      a       rdf:Property ;
+      rdfs:domain thing:Collection ;
+      rdfs:label "containsThing" ;
+      rdfs:range thing:Thing ;
+      rdfs:subPropertyOf thing:hasPart ;
+      skos:prefLabel "containsThing" .
+
+thing:City
+      a       rdfs:Class ;
+      rdfs:label "City" ;
+      rdfs:subClassOf thing:Location ;
+      skos:prefLabel "City" .
+
+thing:hasImage
+      a       rdf:Property ;
+      rdfs:domain rdfs:Resource ;
+      rdfs:label "hasImage" ;
+      rdfs:range thing:Image ;
+      skos:prefLabel "hasImage" .
+
+thing:isDepictedIn
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "isDepictedIn" ;
+      rdfs:range thing:Image ;
+      skos:prefLabel "isDepictedIn" .
+
+thing:firstName
+      a       rdf:Property ;
+      rdfs:domain thing:Person ;
+      rdfs:label "firstName" ;
+      rdfs:range xsd:string ;
+      skos:prefLabel "firstName" .
+
+thing:isDeclinedTopicOf
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "isDeclinedTopicOf" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "isDeclinedTopicOf" .
+
+thing:hasInferredTopic
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "hasInferredTopic" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "hasInferredTopic" .
+
+thing:manages
+      a       rdf:Property ;
+      rdfs:domain thing:Person ;
+      rdfs:label "manages" ;
+      rdfs:range thing:Job ;
+      rdfs:subPropertyOf thing:does ;
+      skos:prefLabel "manages" .
+
+thing:isManagedBy
+      a       rdf:Property ;
+      rdfs:domain thing:Job ;
+      rdfs:label "isManagedBy" ;
+      rdfs:range thing:Person ;
+      rdfs:subPropertyOf thing:isDoneBy ;
+      skos:prefLabel "isManagedBy" .
+
+thing:Software
+      a       rdfs:Class ;
+      rdfs:label "Software" ;
+      rdfs:subClassOf thing:Tool ;
+      skos:prefLabel "Software" .
+
+thing:Note
+      a       rdfs:Class ;
+      rdfs:label "Note" ;
+      rdfs:subClassOf thing:Document ;
+      skos:prefLabel "Note" .
+
+thing:hasSuperTopic
+      a       rdf:Property ;
+      rdfs:domain thing:Topic ;
+      rdfs:label "hasSuperTopic" ;
+      rdfs:range thing:Topic ;
+      skos:prefLabel "hasSuperTopic" .
+
+thing:Webpage
+      a       rdfs:Class ;
+      rdfs:label "Webpage" ;
+      rdfs:subClassOf thing:Document ;
+      skos:prefLabel "Webpage" .
+
+thing:Organization
+      a       rdfs:Class ;
+      rdfs:label "Organization" ;
+      rdfs:subClassOf thing:Group ;
+      skos:prefLabel "Organization" .
+
+thing:isAcceptedTopicOf
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "isAcceptedTopicOf" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "isAcceptedTopicOf" .
+
+thing:Topic
+      a       rdfs:Class ;
+      rdfs:label "Topic" ;
+      rdfs:subClassOf thing:Thing ;
+      skos:prefLabel "Topic" .
+
+thing:Meeting
+      a       rdfs:Class ;
+      rdfs:label "Meeting" ;
+      rdfs:subClassOf thing:SocialEvent ;
+      skos:prefLabel "Meeting" .
+
+thing:roomNumber
+      a       rdf:Property ;
+      rdfs:domain thing:Room ;
+      rdfs:label "roomNumber" ;
+      rdfs:range rdfs:Literal ;
+      skos:prefLabel "roomNumber" .
+
+thing:Project
+      a       rdfs:Class ;
+      rdfs:label "Project" ;
+      rdfs:subClassOf thing:Job ;
+      skos:prefLabel "Project" .
+
+thing:hasLocation
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "hasLocation" ;
+      rdfs:range thing:Location ;
+      skos:prefLabel "hasLocation" .
+
+thing:Video
+      a       rdfs:Class ;
+      rdfs:label "Video" ;
+      rdfs:subClassOf thing:Media ;
+      skos:prefLabel "Video" .
+
+thing:isCreatedBy
+      a       rdf:Property ;
+      rdfs:domain thing:Media ;
+      rdfs:label "isCreatedBy" ;
+      rdfs:range thing:Agent ;
+      skos:prefLabel "isCreatedBy" .
+
+thing:associatedDate
+      a       rdf:Property ;
+      rdfs:domain thing:Media ;
+      rdfs:label "associatedDate" ;
+      rdfs:range rdfs:Literal ;
+      skos:prefLabel "associatedDate" .
+
+thing:isTopicOf
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "isTopicOf" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "isTopicOf" .
+
+thing:isSuggestedTopicOf
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "isSuggestedTopicOf" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "isSuggestedTopicOf" .
+
+thing:hasEmailAddress
+      a       rdf:Property ;
+      rdfs:domain thing:Agent ;
+      rdfs:label "hasEmailAddress" ;
+      rdfs:range <pimo:core#EmailAddress> ;
+      rdfs:subPropertyOf thing:hasAddress ;
+      skos:prefLabel "hasEmailAddress" .
+
+thing:imageAnalysis_xml
+      a       rdf:Property ;
+      rdfs:domain thing:Image ;
+      rdfs:label "imageAnalysis_xml" ;
+      rdfs:range rdfs:Literal ;
+      skos:prefLabel "imageAnalysis_xml" .
+
+thing:hasAttendee
+      a       rdf:Property ;
+      rdfs:domain thing:SocialEvent ;
+      rdfs:label "hasAttendee" ;
+      rdfs:range thing:Agent ;
+      rdfs:subPropertyOf thing:hasPart ;
+      skos:prefLabel "hasAttendee" .
+
+thing:hasDeclinedTopic
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "hasDeclinedTopic" ;
+      rdfs:range thing:Thing ;
+      skos:prefLabel "hasDeclinedTopic" .
+
+thing:skypeName
+      a       rdf:Property ;
+      rdfs:domain thing:Person ;
+      rdfs:label "skypeName" ;
+      rdfs:range rdfs:Literal ;
+      skos:prefLabel "skypeName" .
+
+thing:copiesLabelFromOccurrence
+      a       rdf:Property ;
+      rdfs:domain thing:Thing ;
+      rdfs:label "copiesLabelFromOccurrence" ;
+      rdfs:range rdfs:Literal ;
+      skos:prefLabel "copiesLabelFromOccurrence" .
+
+thing:hasPhotoTakenAtLocation
+      a       rdf:Property ;
+      rdfs:domain thing:Location ;
+      rdfs:label "hasPhotoTakenAtLocation" ;
+      rdfs:range thing:Image ;
+      skos:prefLabel "hasPhotoTakenAtLocation" .
+
+thing:imageAnalysis_suggestions
+      a       rdf:Property ;
+      rdfs:domain thing:Image ;
+      rdfs:label "imageAnalysis_suggestions" ;
+      rdfs:range rdfs:Literal ;
+      skos:prefLabel "imageAnalysis_suggestions" .
+
+thing:phoneNumber
+      a       rdf:Property ;
+      rdfs:domain thing:Agent ;
+      rdfs:label "phoneNumber" ;
+      rdfs:range rdfs:Literal ;
+      skos:prefLabel "phoneNumber" .

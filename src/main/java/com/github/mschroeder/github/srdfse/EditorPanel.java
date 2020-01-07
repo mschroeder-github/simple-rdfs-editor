@@ -3,6 +3,8 @@ package com.github.mschroeder.github.srdfse;
 import java.awt.Color;
 import java.awt.Component;
 import static java.awt.EventQueue.invokeLater;
+import java.awt.KeyEventDispatcher;
+import java.awt.KeyboardFocusManager;
 import java.awt.LayoutManager;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
@@ -21,18 +23,24 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import static java.util.stream.Collectors.toList;
 import javax.imageio.ImageIO;
 import javax.swing.DefaultComboBoxModel;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JTree;
+import javax.swing.ListModel;
 import javax.swing.TransferHandler;
 import static javax.swing.TransferHandler.MOVE;
 import javax.swing.event.DocumentEvent;
+import javax.swing.event.ListDataListener;
 import javax.swing.event.TreeModelEvent;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -48,6 +56,7 @@ import org.json.JSONObject;
 
 /**
  * The editor gui logic in one panel.
+ *
  * @author Markus Schr&ouml;der
  */
 public class EditorPanel extends javax.swing.JPanel {
@@ -61,6 +70,10 @@ public class EditorPanel extends javax.swing.JPanel {
     //true in order to have not a recursive listening call between label and localname
     private boolean currentlySyncing;
 
+    //used for drag and drop with alt
+    private Object keyboardLock = new Object();
+    private boolean isAltPressed = false;
+    
     private Color notNewColor = new Color(245, 245, 255);
     private Color domainRangeColor = new Color(188, 223, 188);
 
@@ -71,13 +84,24 @@ public class EditorPanel extends javax.swing.JPanel {
     private static Icon classIcon;
     private static Icon propertyIcon;
     private static Icon datatypeIcon;
+    private static Icon instanceIcon;
+    private static Icon literalIcon;
+
+    private List<EditorListener> listeners;
+    
+    private Supplier<String> instanceLocalnameGenerator = () -> {
+        //starts with letter
+        return "I" + UUID.randomUUID().toString();
+    };
 
     {
         try {
-            ontologyIcon = new ImageIcon(ImageIO.read(EditorFrame.class.getResourceAsStream("/web/img/ontology.png")));
-            classIcon = new ImageIcon(ImageIO.read(EditorFrame.class.getResourceAsStream("/web/img/class.png")));
-            propertyIcon = new ImageIcon(ImageIO.read(EditorFrame.class.getResourceAsStream("/web/img/property.png")));
-            datatypeIcon = new ImageIcon(ImageIO.read(EditorFrame.class.getResourceAsStream("/web/img/datatype.png")));
+            ontologyIcon = new ImageIcon(ImageIO.read(EditorPanel.class.getResourceAsStream("/web/img/ontology.png")));
+            classIcon = new ImageIcon(ImageIO.read(EditorPanel.class.getResourceAsStream("/web/img/class.png")));
+            propertyIcon = new ImageIcon(ImageIO.read(EditorPanel.class.getResourceAsStream("/web/img/property.png")));
+            datatypeIcon = new ImageIcon(ImageIO.read(EditorPanel.class.getResourceAsStream("/web/img/datatype.png")));
+            instanceIcon = new ImageIcon(ImageIO.read(EditorPanel.class.getResourceAsStream("/web/img/instance.png")));
+            literalIcon = new ImageIcon(ImageIO.read(EditorPanel.class.getResourceAsStream("/web/img/literal.png")));
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
@@ -88,7 +112,7 @@ public class EditorPanel extends javax.swing.JPanel {
         Property,
         Range
     }
-    
+
     public EditorPanel() {
         initComponents();
         init();
@@ -96,10 +120,19 @@ public class EditorPanel extends javax.swing.JPanel {
 
     @Override
     public void setLayout(LayoutManager mgr) {
-        if(mgr == null)
+        if (mgr == null) {
             return;
-        
+        }
+
         super.setLayout(mgr);
+    }
+
+    public void addListener(EditorListener listener) {
+        listeners.add(listener);
+    }
+    
+    public void removeListener(EditorListener listener) {
+        listeners.remove(listener);
     }
     
     public void newOntology() {
@@ -107,6 +140,12 @@ public class EditorPanel extends javax.swing.JPanel {
         updateSelected(null);
         //updateFile(null);
         Ontology ont = new Ontology();
+        ont.setPrefix("ex");
+        ont.setUri("http://example.com/ex");
+        ont.setFragment("/");
+        ont.setName("Example");
+        ont.setInstanceNamespace("http://example.com/inst#");
+        ont.setInstancePrefix("inst");
         loadUserOntology(ont);
     }
 
@@ -119,17 +158,20 @@ public class EditorPanel extends javax.swing.JPanel {
         jTextFieldOntoURI.setText(getUserOntology().getUri());
         jTextFieldPrefix.setText(getUserOntology().getPrefix());
         jTextFieldName.setText(getUserOntology().getName());
-        
+        jTextFieldFragment.setText(getUserOntology().getFragment());
+        jTextFieldInstNS.setText(getUserOntology().getInstanceNamespace());
+        jTextFieldInstPrefix.setText(getUserOntology().getInstancePrefix());
+
         getModels().forEach(m -> m.fireEvent(OntologyTreeModel.Modification.Structure, onto));
 
         getTrees().forEach(jtree -> SwingUtility.expandAll(jtree));
     }
 
-    public void importOntologyFromResource(String resourcePath) {
+    public Ontology importOntologyFromResource(String resourcePath) {
         String basename = FilenameUtils.getBaseName(resourcePath);
 
         Model m = ModelFactory.createDefaultModel().read(
-                EditorFrame.class.getResourceAsStream(resourcePath),
+                EditorPanel.class.getResourceAsStream(resourcePath),
                 null,
                 "TTL"
         );
@@ -137,16 +179,36 @@ public class EditorPanel extends javax.swing.JPanel {
         Ontology onto = new Ontology();
         onto.setPrefix(basename);
 
-        Ontology.load(onto, m);
+        Ontology.loadTBox(onto, m);
 
-        importOntology(onto);
+        return importOntology(onto);
     }
 
-    public void importOntology(Ontology onto) {
+    public Ontology ensureOntologyXSD() {
+        for (int i = 0; i < ontologies.size(); i++) {
+            if (ontologies.get(i).getPrefix().equals("xsd")) {
+                return ontologies.get(i);
+            }
+        }
+
+        return importOntologyFromResource("/vocab/xsd.ttl");
+    }
+    
+    public Ontology ensureOntologyRDFS() {
+        for (int i = 0; i < ontologies.size(); i++) {
+            if (ontologies.get(i).getPrefix().equals("rdfs")) {
+                return ontologies.get(i);
+            }
+        }
+
+        return importOntologyFromResource("/vocab/rdfs.ttl");
+    }
+
+    public Ontology importOntology(Ontology onto) {
         //no duplicate
         for (int i = 0; i < ontologies.size(); i++) {
             if (ontologies.get(i).getPrefix().equals(onto.getPrefix())) {
-                return;
+                return ontologies.get(i);
             }
         }
 
@@ -154,6 +216,8 @@ public class EditorPanel extends javax.swing.JPanel {
         fireEvents(OntologyTreeModel.Modification.Inserted, onto);
 
         getTrees().forEach(jtree -> SwingUtility.expandAll(jtree));
+
+        return onto;
     }
 
     public void newResource(Resource.Type type, ActionEvent evt) {
@@ -164,6 +228,9 @@ public class EditorPanel extends javax.swing.JPanel {
             jTextFieldLocalname.setText("");
             jTextFieldLabel.setText("");
             jTextAreaComment.setText("");
+        }
+        if (type == Resource.Type.Instance) {
+            jTextFieldLocalname.setText(instanceLocalnameGenerator.get());
         }
         jTextFieldLabel.requestFocus();
         jTreeDomain.repaint();
@@ -176,18 +243,26 @@ public class EditorPanel extends javax.swing.JPanel {
             updateSelected();
         }
     }
-    
+
     public void resetRange() {
         if (hasSelected() && selected.getType() == Resource.Type.Property) {
             selected.setRange(null);
             updateSelected();
         }
     }
+
+    public void resetInverseOf() {
+        Resource property = getSelectedProperty();
+        if(property != null) {
+            getUserOntology().removeInverseOf(property);
+            fireEvents(OntologyTreeModel.Modification.Changed, property);
+        }
+    }
     
     public Ontology getUserOntology() {
         return ontologies.get(0);
     }
-    
+
     public JSONObject toJSON() {
         JSONObject json = new JSONObject();
 
@@ -203,14 +278,131 @@ public class EditorPanel extends javax.swing.JPanel {
 
         return json;
     }
-    
+
     public void setOntoUriEditable(boolean editable) {
         jTextFieldOntoURI.setEditable(editable);
     }
+
+    public Resource createInstance(Resource clazz) {
+        Resource inst = new Resource(getUserOntology(), Resource.Type.Instance);
+        inst.setLocalname(instanceLocalnameGenerator.get());
+        clazz.addInstance(inst);
+        return inst;
+    }
+    
+    public Resource createInstance() {
+        Resource inst = new Resource(getUserOntology(), Resource.Type.Instance);
+        inst.setLocalname(instanceLocalnameGenerator.get());
+        return inst;
+    }
+    
+    /**
+     * The one that is currently edited.
+     * @return 
+     */
+    public Resource getFocusedResource() {
+        return selected;
+    }
+    
+    public Resource getSelectedDomain() {
+        return getSelected(TreeType.Domain);
+    }
+
+    public Resource getSelectedRange() {
+        return getSelected(TreeType.Range);
+    }
+
+    public Resource getSelectedProperty() {
+        return getSelected(TreeType.Property);
+    }
+
+    public Resource getSelectedDomainInstance() {
+        return jListDomainInstances.getSelectedValue();
+    }
+
+    public String getSelectedLanguage() {
+        return (String) jComboBoxLabelLang.getSelectedItem();
+    }
+    
+    public void setInstanceLocalnameGenerator(Supplier<String> instanceLocalnameGenerator) {
+        this.instanceLocalnameGenerator = instanceLocalnameGenerator;
+    }
+    
+    private Resource getSelected(TreeType type) {
+        TreePath path = getTree(type).getSelectionPath();
+        if (path == null) {
+            return null;
+        }
+
+        Object obj = path.getLastPathComponent();
+
+        if (obj instanceof Resource) {
+            return (Resource) obj;
+        }
+
+        return null;
+    }
+
+    public Resource createResource(Resource.Type type, String localname, String label, String comment, String lang) {
+        Resource res = new Resource(getUserOntology(), type);
+
+        //label lang value
+        res.setLocalname(localname);
+        res.getLabel().put(lang, label);
+        res.getComment().put(lang, comment);
+
+        if (type == Resource.Type.Class) {
+            getUserOntology().getRootClasses().add(res);
+
+            fireEvents(OntologyTreeModel.Modification.Inserted, res);
+
+        } else if (type == Resource.Type.Property) {
+            getUserOntology().getRootProperties().add(res);
+
+            fireEvents(OntologyTreeModel.Modification.Inserted, res);
+            
+        } else if (type == Resource.Type.Instance) {
+
+            Resource selectedClass = getSelectedDomain();
+            if (selectedClass == null) { //|| selectedClass.getOntology() != getUserOntology()) { //only imported ones?
+                return null;
+            }
+
+            selectedClass.addInstance(res);
+        }
+
+        return res;
+    }
+
+    
     
     //private
-
     private void init() {
+        listeners = new ArrayList<>();
+        
+        //to keep track if alt is down
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(new KeyEventDispatcher() {
+            @Override
+            public boolean dispatchKeyEvent(KeyEvent ke) {
+                synchronized (keyboardLock) {
+                    switch (ke.getID()) {
+                    case KeyEvent.KEY_PRESSED:
+                        if (ke.isAltDown()) {
+                            isAltPressed = true;
+                        }
+                        break;
+
+                    case KeyEvent.KEY_RELEASED:
+                        if (!ke.isAltDown()) {
+                            isAltPressed = false;
+                        }
+                        break;
+                    }
+                    return false;
+                }
+            }
+        });
+        
         ontologies = new ArrayList<>();
 
         DefaultComboBoxModel<String> cbm = (DefaultComboBoxModel<String>) jComboBoxLabelLang.getModel();
@@ -233,6 +425,15 @@ public class EditorPanel extends javax.swing.JPanel {
         jTextFieldName.getDocument().addDocumentListener(SwingUtility.getAllListener(c -> {
             getUserOntology().setName(jTextFieldName.getText());
         }));
+        jTextFieldFragment.getDocument().addDocumentListener(SwingUtility.getAllListener(c -> {
+            getUserOntology().setFragment(jTextFieldFragment.getText());
+        }));
+        jTextFieldInstNS.getDocument().addDocumentListener(SwingUtility.getAllListener(c -> {
+            getUserOntology().setInstanceNamespace(jTextFieldInstNS.getText());
+        }));
+        jTextFieldInstPrefix.getDocument().addDocumentListener(SwingUtility.getAllListener(c -> {
+            getUserOntology().setInstancePrefix(jTextFieldInstPrefix.getText());
+        }));
 
         jTextFieldLocalname.getDocument().addDocumentListener(SwingUtility.getAllListener(this::localnameChanged));
         jTextFieldLabel.getDocument().addDocumentListener(SwingUtility.getAllListener(this::labelChanged));
@@ -243,6 +444,7 @@ public class EditorPanel extends javax.swing.JPanel {
 
         //initFilechooser();
         initTrees();
+        initLists();
 
         //an empty one which is created by the user
         newOntology();
@@ -251,11 +453,11 @@ public class EditorPanel extends javax.swing.JPanel {
         jTextFieldLabel.requestFocus();
         //setLocationRelativeTo(null);
     }
-    
+
     private ActionEvent noevt() {
         return new ActionEvent(this, 0, null);
     }
-    
+
     private void initTrees() {
         jTreeDomain.setModel(new OntologyTreeModel(ontologies, Resource.Type.Class, false));
         jTreeProperties.setModel(new OntologyTreeModel(ontologies, Resource.Type.Property, false));
@@ -279,7 +481,7 @@ public class EditorPanel extends javax.swing.JPanel {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (!jtree.isSelectionEmpty()) {
-                    treeSelected(new TreeSelectionEvent(jtree, jtree.getSelectionPath(), false, jtree.getSelectionPath(), jtree.getSelectionPath()));
+                    treeSelected(new TreeSelectionEvent(jtree, jtree.getSelectionPath(), false, jtree.getSelectionPath(), jtree.getSelectionPath()), e.isControlDown());
                 }
             }
         }));
@@ -290,8 +492,193 @@ public class EditorPanel extends javax.swing.JPanel {
         });
     }
 
+    private void initLists() {
+        getLists().forEach(jlist -> jlist.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (!jlist.isSelectionEmpty() && !e.isControlDown() && !e.isShiftDown()) {
+                    updateSelected((Resource) jlist.getSelectedValue());
+                }
+            }
+        }));
+
+        InstanceListCellRenderer renderer = new InstanceListCellRenderer();
+        getLists().forEach(jlist -> jlist.setCellRenderer(renderer));
+
+        ListSourceTransferHandler src = new ListSourceTransferHandler();
+        jListRangeInstances.setTransferHandler(src);
+        
+        ListTargetTransferHandler trg = new ListTargetTransferHandler();
+        jListObjects.setTransferHandler(trg);
+        
+        
+        jListDomainInstances.setModel(new InstanceListModel(TreeType.Domain));
+        jListRangeInstances.setModel(new InstanceListModel(TreeType.Range));
+        jListObjects.setModel(new InstanceListModel(TreeType.Property));
+        
+    }
+
+    private DataFlavor listTransferFlavor = createFlavor(ListTransfer.class);
+
+    private class ListTransfer implements Transferable {
+
+        List<Resource> resources;
+
+        public ListTransfer(List<Resource> res) {
+            this.resources = res;
+        }
+
+        @Override
+        public DataFlavor[] getTransferDataFlavors() {
+            return new DataFlavor[]{listTransferFlavor};
+        }
+
+        @Override
+        public boolean isDataFlavorSupported(DataFlavor flavor) {
+            return listTransferFlavor.equals(flavor);
+        }
+
+        @Override
+        public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException, IOException {
+            if (!isDataFlavorSupported(flavor)) {
+                throw new UnsupportedFlavorException(flavor);
+            }
+            return resources;
+        }
+    }
+    
+    private class ListSourceTransferHandler extends TransferHandler {
+
+        @Override
+        public int getSourceActions(JComponent c) {
+            return COPY;
+        }
+
+        @Override
+        protected Transferable createTransferable(JComponent c) {
+            List<Resource> selected = jListRangeInstances.getSelectedValuesList();
+            return new ListTransfer(selected);
+        }
+    }
+
+    private class ListTargetTransferHandler extends TransferHandler {
+
+        @Override
+        public boolean canImport(TransferHandler.TransferSupport support) {
+            return support.isDataFlavorSupported(listTransferFlavor) && 
+                   getSelectedDomainInstance() != null && 
+                   getSelectedProperty() != null;
+        }
+
+        @Override
+        public boolean importData(TransferHandler.TransferSupport support) {
+
+            List<Resource> selected;
+            try {
+                selected = (List<Resource>) support.getTransferable().getTransferData(listTransferFlavor);
+            } catch (UnsupportedFlavorException | IOException ex) {
+                return false;
+            }
+
+            //need selected subject and selected property
+            dragAndDropIntoObjectList(selected);
+
+            return true;
+        }
+    }
+
+    private void dragAndDropIntoObjectList(List<Resource> objects) {
+        Resource subject = getSelectedDomainInstance();
+        Resource predicate = getSelectedProperty();
+        
+        if(subject != null && predicate != null) {
+            for(Resource object : objects) {
+                predicate.addLink(subject, object);
+            }
+            
+            jListObjects.updateUI();
+        }
+    }
+
+    private class InstanceListModel implements ListModel<Resource> {
+
+        private TreeType type;
+        
+        public InstanceListModel(TreeType type) {
+            this.type = type;
+        }
+        
+        private List<Resource> getList() {
+            if(type == TreeType.Property) {
+                Resource subject = getSelectedDomainInstance();
+                Resource predicate = getSelectedProperty();
+                if (subject != null && predicate != null) {
+                    return predicate.getObjects(subject);
+                }
+                return Arrays.asList();
+            }
+            
+            Resource selected = null;
+            switch(type) {
+                case Domain:   selected = getSelectedDomain(); break;
+                case Range:    selected = getSelectedRange();  break;
+            }
+            
+            if(selected != null)
+                return selected.getInstances();
+            
+            return Arrays.asList();
+        }
+        
+        @Override
+        public int getSize() {
+            return getList().size();
+        }
+
+        @Override
+        public Resource getElementAt(int index) {
+            List<Resource> l = getList();
+            
+            if(index < 0 || index >= l.size())
+                return null;
+            
+            return l.get(index);
+        }
+
+        @Override
+        public void addListDataListener(ListDataListener l) {
+        }
+
+        @Override
+        public void removeListDataListener(ListDataListener l) {
+        }
+        
+    }
+    
     private Resource getSelectedResource() {
         return selected;
+    }
+
+    private class InstanceListCellRenderer extends DefaultListCellRenderer {
+
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            
+            Resource res = (Resource) value;
+            if(res.getType() == Resource.Type.Literal) {
+                label.setText(res.getLiteral().get(""));
+                label.setIcon(literalIcon);
+                
+            } else {
+                String lbl = res.getLabel().get(getSelectedLanguage());
+                label.setText(lbl);
+                label.setIcon(instanceIcon);
+            }
+            
+            return label;
+        }
+
     }
 
     private class OntologyCellRenderer extends DefaultTreeCellRenderer {
@@ -340,6 +727,14 @@ public class EditorPanel extends javax.swing.JPanel {
                 } else {
                     sb.append(EMPTY);
                 }
+                
+                Resource inv = getUserOntology().getInverseOf(resource);
+                if(inv != null) {
+                    sb.append(" [");
+                    sb.append(inv.getLocalname());
+                    sb.append("]");
+                }
+                
                 sb.append("</font>");
 
                 sb.append("</html>");
@@ -365,10 +760,10 @@ public class EditorPanel extends javax.swing.JPanel {
         }
     }
 
-    private void treeSelected(TreeSelectionEvent e) {
+    private void treeSelected(TreeSelectionEvent e, boolean controlDown) {
         JTree jtree = (JTree) e.getSource();
         Object obj = e.getPath().getLastPathComponent();
-        if (obj instanceof Resource) {
+        if (obj instanceof Resource && !controlDown) {
             updateSelected((Resource) obj);
         } else if (obj instanceof Ontology) {
             Ontology ont = (Ontology) obj;
@@ -381,8 +776,6 @@ public class EditorPanel extends javax.swing.JPanel {
             }
         }
     }
-
-    
 
     private boolean hasSelected() {
         return selected != null;
@@ -399,6 +792,9 @@ public class EditorPanel extends javax.swing.JPanel {
                 break;
             case Datatype:
                 jLabelType.setIcon(datatypeIcon);
+                break;
+            case Instance:
+                jLabelType.setIcon(instanceIcon);
                 break;
         }
     }
@@ -432,8 +828,8 @@ public class EditorPanel extends javax.swing.JPanel {
 
         if (hasSelected()) {
             jTextFieldLocalname.setText(selected.getLocalname());
-            jTextFieldLabel.setText(selected.getLabel().get((String) jComboBoxLabelLang.getSelectedItem()));
-            jTextAreaComment.setText(selected.getComment().get((String) jComboBoxLabelLang.getSelectedItem()));
+            jTextFieldLabel.setText(selected.getLabel().get(getSelectedLanguage()));
+            jTextAreaComment.setText(selected.getComment().get(getSelectedLanguage()));
 
             jTreeDomain.repaint();
             jTreeRange.repaint();
@@ -445,43 +841,62 @@ public class EditorPanel extends javax.swing.JPanel {
                 jTextFieldLabel.setEditable(false);
                 jTextAreaComment.setEditable(false);
             }
+            
+            listeners.forEach(l -> l.selected(selected));
         }
+
+        updateInstanceList();
+    }
+
+    private void updateInstanceList() {
+        getLists().forEach(jlist -> jlist.updateUI());
     }
 
     private void createResourceByEnter(KeyEvent evt, boolean needControl) {
         if (evt.getKeyCode() == VK_ENTER && (!needControl || evt.isControlDown()) && !hasSelected()) {
+            createResource(evt, needControl);
+        }
+    }
 
-            Resource res = new Resource(getUserOntology(), selectedType);
+    private void createResource(KeyEvent evt, boolean needControl) {
 
-            //label lang value
-            res.setLocalname(jTextFieldLocalname.getText());
-            res.getLabel().put((String) jComboBoxLabelLang.getSelectedItem(), jTextFieldLabel.getText());
-            res.getComment().put((String) jComboBoxLabelLang.getSelectedItem(), jTextAreaComment.getText());
+        /*
+        Resource res = new Resource(getUserOntology(), selectedType);
 
-            if (selectedType == Resource.Type.Class) {
-                getUserOntology().getRootClasses().add(res);
+        //label lang value
+        res.setLocalname(jTextFieldLocalname.getText());
+        res.getLabel().put((String) jComboBoxLabelLang.getSelectedItem(), jTextFieldLabel.getText());
+        res.getComment().put((String) jComboBoxLabelLang.getSelectedItem(), jTextAreaComment.getText());
 
-                fireEvents(OntologyTreeModel.Modification.Inserted, res);
+        if (selectedType == Resource.Type.Class) {
+            getUserOntology().getRootClasses().add(res);
 
-            } else if (selectedType == Resource.Type.Property) {
-                getUserOntology().getRootProperties().add(res);
+            fireEvents(OntologyTreeModel.Modification.Inserted, res);
 
-                fireEvents(OntologyTreeModel.Modification.Inserted, res);
+        } else if (selectedType == Resource.Type.Property) {
+            getUserOntology().getRootProperties().add(res);
+
+            fireEvents(OntologyTreeModel.Modification.Inserted, res);
+        }
+         */
+        Resource res = createResource(selectedType, jTextFieldLocalname.getText(), jTextFieldLabel.getText(), jTextAreaComment.getText(), getSelectedLanguage());
+
+        if (res == null) {
+            return;
+        }
+
+        //expand
+        expandPaths(getUserOntology());
+
+        //what do next
+        if (!needControl && evt.isControlDown()) {
+            //reset
+            newResource(selectedType, noevt());
+        } else {
+            if (jTextFieldLabel.hasFocus()) {
+                jTextAreaComment.requestFocus();
             }
-
-            //expand
-            expandPaths(getUserOntology());
-
-            //what do next
-            if (!needControl && evt.isControlDown()) {
-                //reset
-                newResource(selectedType, noevt());
-            } else {
-                if (jTextFieldLabel.hasFocus()) {
-                    jTextAreaComment.requestFocus();
-                }
-                updateSelected(res);
-            }
+            updateSelected(res);
         }
     }
 
@@ -497,6 +912,14 @@ public class EditorPanel extends javax.swing.JPanel {
     }
 
     private void localnameChanged(DocumentEvent e) {
+        if (selectedType == Resource.Type.Instance) {
+            if (hasSelected()) {
+                selected.setLocalname(jTextFieldLocalname.getText());
+                updateInstanceList();
+            }
+            return;
+        }
+
         if (jCheckBoxSync.isSelected() && !currentlySyncing && !hasSelected()) {
             invokeLater(() -> {
                 currentlySyncing = true;
@@ -512,6 +935,14 @@ public class EditorPanel extends javax.swing.JPanel {
     }
 
     private void labelChanged(DocumentEvent e) {
+        if (selectedType == Resource.Type.Instance) {
+            if (hasSelected()) {
+                selected.getLabel().put(getSelectedLanguage(), jTextFieldLabel.getText());
+                updateInstanceList();
+            }
+            return;
+        }
+
         if (jCheckBoxSync.isSelected() && !currentlySyncing && !hasSelected()) {
             invokeLater(() -> {
                 currentlySyncing = true;
@@ -521,23 +952,27 @@ public class EditorPanel extends javax.swing.JPanel {
         }
 
         if (hasSelected()) {
-            selected.getLabel().put((String) jComboBoxLabelLang.getSelectedItem(), jTextFieldLabel.getText());
+            selected.getLabel().put(getSelectedLanguage(), jTextFieldLabel.getText());
             fireEvents(OntologyTreeModel.Modification.Changed, selected);
         }
     }
 
     private void commentChanged(DocumentEvent e) {
         if (hasSelected()) {
-            selected.getComment().put((String) jComboBoxLabelLang.getSelectedItem(), jTextAreaComment.getText());
+            selected.getComment().put(getSelectedLanguage(), jTextAreaComment.getText());
             fireEvents(OntologyTreeModel.Modification.Changed, selected);
         }
     }
 
     private String label2localname(String label) {
-        return encodeURIComponent(CaseUtils.toCamelCase(label.trim(), selectedType == Resource.Type.Class));
+        return label2localname(label, selectedType);
     }
 
-    private String localname2label(String localname) {
+    public static String label2localname(String label, Resource.Type type) {
+        return encodeURIComponent(CaseUtils.toCamelCase(label.trim(), type == Resource.Type.Class));
+    }
+
+    public static String localname2label(String localname) {
         return decodeURIComponent(splitCamelCaseString(localname.trim()));
     }
 
@@ -599,11 +1034,31 @@ public class EditorPanel extends javax.swing.JPanel {
         return null;
     }
 
+    private JList getList(TreeType t) {
+        switch (t) {
+            case Domain:
+                return jListDomainInstances;
+            case Property:
+                return jListObjects;
+            case Range:
+                return jListRangeInstances;
+        }
+        return null;
+    }
+
     private List<JTree> getTrees() {
         return Arrays.asList(
                 getTree(TreeType.Domain),
                 getTree(TreeType.Property),
                 getTree(TreeType.Range)
+        );
+    }
+
+    private List<JList> getLists() {
+        return Arrays.asList(
+                getList(TreeType.Domain),
+                getList(TreeType.Property),
+                getList(TreeType.Range)
         );
     }
 
@@ -716,7 +1171,7 @@ public class EditorPanel extends javax.swing.JPanel {
         public boolean importData(TransferHandler.TransferSupport support) {
             Transferable t = support.getTransferable();
             //System.out.println("importData " + t);
-
+            
             Object obj;
             try {
                 obj = t.getTransferData(treeTransferFlavor);
@@ -744,6 +1199,8 @@ public class EditorPanel extends javax.swing.JPanel {
         //System.out.println("src: " + Arrays.toString(sources));
         //System.out.println("target: " + target);
 
+        
+        
         for (TreePath source : sources) {
             Object src = source.getLastPathComponent();
             Object trg = target.getLastPathComponent();
@@ -763,19 +1220,19 @@ public class EditorPanel extends javax.swing.JPanel {
 
             Resource property = new Resource(getUserOntology(), Resource.Type.Property);
             property.setLocalname("has" + range.getLocalname());
-            property.getLabel().put((String) jComboBoxLabelLang.getSelectedItem(), "has " + range.getLocalname());
+            property.getLabel().put(getSelectedLanguage(), "has " + range.getLocalname());
 
             property.setDomain(domain);
             property.setRange(range);
 
             getUserOntology().getRootProperties().add(property);
-            
-            if(guiEvents) {
+
+            if (guiEvents) {
                 fireEvents(OntologyTreeModel.Modification.Inserted, property);
                 expandPaths(getUserOntology());
                 updateSelected(property);
             }
-            
+
             return;
         }
 
@@ -785,8 +1242,14 @@ public class EditorPanel extends javax.swing.JPanel {
             Resource domain = (Resource) src;
             Resource property = (Resource) trg;
             if (property.getOntology() == getUserOntology()) {
-                property.setDomain(domain);
-                if(guiEvents) {
+
+                if (domain.getOntology() != getUserOntology()) {
+                    property.setDomain(domain.copyOnlyRef());
+                } else {
+                    property.setDomain(domain);
+                }
+
+                if (guiEvents) {
                     updateSelected(property);
                 }
             }
@@ -798,8 +1261,14 @@ public class EditorPanel extends javax.swing.JPanel {
             Resource range = (Resource) src;
             Resource property = (Resource) trg;
             if (property.getOntology() == getUserOntology()) {
-                property.setRange(range);
-                if(guiEvents) {
+
+                if (range.getOntology() != getUserOntology()) {
+                    property.setRange(range.copyOnlyRef());
+                } else {
+                    property.setRange(range);
+                }
+
+                if (guiEvents) {
                     updateSelected(property);
                 }
             }
@@ -825,60 +1294,76 @@ public class EditorPanel extends javax.swing.JPanel {
             }
 
             trgO.getRoot(srcR.getType()).add(srcR);
-            
-            if(guiEvents) {
+
+            if (guiEvents) {
                 fireEvents(OntologyTreeModel.Modification.Inserted, srcR);
                 expandPaths(srcR);
             }
-            
+
         } //target is a resource
         else if (trg instanceof Resource
                 && (((Resource) trg).getOntology() == getUserOntology() || ((Resource) trg).isImported())
                 && sourceTree == targetTree) {
             Resource trgR = (Resource) trg;
 
-            removeResource(srcR, guiEvents);
+            if(isAltPressed) {
+                //for properties: inverseOf
+                if(srcR.getType() == Resource.Type.Property && trgR.getType() == Resource.Type.Property) {
+                    getUserOntology().addInverseOf(srcR, trgR);
+                    
+                    if (guiEvents) {
+                        fireEvents(OntologyTreeModel.Modification.Changed, srcR);
+                    }
+                }
+            } else {
+                //as sub *
+                removeResource(srcR, guiEvents);
+                trgR.addChild(srcR);
 
-            trgR.addChild(srcR);
-            
-            if(guiEvents) {
-                fireEvents(OntologyTreeModel.Modification.Inserted, srcR);
+                if (guiEvents) {
+                    fireEvents(OntologyTreeModel.Modification.Inserted, srcR);
+                }
             }
         }
 
-        if(guiEvents) {
+        if (guiEvents) {
             expandPaths(trg);
         }
     }
+
 
     //called by Server Websocket messageDragAndDrop
     /*package*/ void dragAndDrop(String srcTreeType, int srcHashCode, String dstTreeType, int dstHashCode) {
         JTree sourceTree = getTree(TreeType.valueOf(srcTreeType));
         JTree targetTree = getTree(TreeType.valueOf(dstTreeType));
-        
+
         Object src = getObjectByHashCode(srcHashCode);
-        if(src == null)
+        if (src == null) {
             throw new RuntimeException("No src object found for hashCode " + srcHashCode);
-        
+        }
+
         Object dst = getObjectByHashCode(dstHashCode);
-        if(dst == null)
+        if (dst == null) {
             throw new RuntimeException("No dst object found for hashCode " + dstHashCode);
-        
+        }
+
         dragAndDrop(sourceTree, src, targetTree, dst, false);
     }
-    
+
     /*package*/ Object getObjectByHashCode(int hashCode) {
-        for(Ontology onto : ontologies) {
-            if(onto.hashCode() == hashCode)
+        for (Ontology onto : ontologies) {
+            if (onto.hashCode() == hashCode) {
                 return onto;
-            
+            }
+
             Resource res = onto.findByHashCode(hashCode);
-            if(res != null)
+            if (res != null) {
                 return res;
+            }
         }
         return null;
     }
-    
+
     /* package */ void removeOntology(Ontology onto) {
         ontologies.remove(onto);
     }
@@ -897,15 +1382,51 @@ public class EditorPanel extends javax.swing.JPanel {
             onto.getRoot(srcR.getType()).remove(srcR);
         }
 
-        //because we can have two: in case of 'class' we have domain and range
-        if(guiEvents) {
+        //because we can have two events: in case of 'class' we have domain and range
+        if (guiEvents) {
             for (int i = 0; i < events.size(); i++) {
                 sourceModels.get(i).fireEvent(OntologyTreeModel.Modification.Removed, events.get(i));
             }
         }
     }
 
-
+    private void removeResource(KeyEvent evt) {
+        if (evt.getKeyCode() == KeyEvent.VK_DELETE) {
+            JTree jtree = (JTree) evt.getSource();
+            TreePath selected = jtree.getSelectionPath();
+            if (selected != null) {
+                Object obj = selected.getLastPathComponent();
+                if (obj instanceof Resource) {
+                    Resource res = (Resource) obj;
+                    //TODO if class remove links having instances
+                    if (res == this.selected) {
+                        newResource(res.getType(), noevt());
+                    }
+                    if (res.getOntology() == getUserOntology() || res.isImported()) {
+                        removeResource(res, true);
+                    }
+                } else if (obj instanceof Ontology && obj != getUserOntology()) {
+                    fireEvents(OntologyTreeModel.Modification.Removed, obj);
+                    ontologies.remove((Ontology) obj);
+                }
+            }
+        }
+    }
+    
+    private void removeInstances(KeyEvent evt) {
+        if (evt.getKeyCode() == KeyEvent.VK_DELETE) {
+            JList<Resource> jlist = (JList) evt.getSource();
+            if(!jlist.isSelectionEmpty()) {
+                for(Resource inst : jlist.getSelectedValuesList()) {
+                    inst.getParent().removeInstance(inst);
+                    
+                    //remove links where resource is part of it
+                    getUserOntology().removeLinksHaving(inst);
+                }
+                jlist.updateUI();
+            }
+        }
+    }
     
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
@@ -930,7 +1451,14 @@ public class EditorPanel extends javax.swing.JPanel {
         jTextFieldPrefix = new javax.swing.JTextField();
         jLabelName = new javax.swing.JLabel();
         jTextFieldName = new javax.swing.JTextField();
-        jPanelBottom = new javax.swing.JPanel();
+        jTextFieldFragment = new javax.swing.JTextField();
+        jButtonNewInstance = new javax.swing.JButton();
+        jLabelNamespace = new javax.swing.JLabel();
+        jTextFieldInstNS = new javax.swing.JTextField();
+        jLabelInstPrefix = new javax.swing.JLabel();
+        jTextFieldInstPrefix = new javax.swing.JTextField();
+        jSplitPaneTboxAbox = new javax.swing.JSplitPane();
+        jPanelTBox = new javax.swing.JPanel();
         jPanelDomain = new javax.swing.JPanel();
         jLabelDomain = new javax.swing.JLabel();
         jTextFieldDomainFilter = new javax.swing.JTextField();
@@ -946,8 +1474,21 @@ public class EditorPanel extends javax.swing.JPanel {
         jTextFieldRangeFilter = new javax.swing.JTextField();
         jScrollPaneRange = new javax.swing.JScrollPane();
         jTreeRange = new javax.swing.JTree();
+        jPanelABox = new javax.swing.JPanel();
+        jPanelSubjects = new javax.swing.JPanel();
+        jLabelDomainInstances = new javax.swing.JLabel();
+        jScrollPaneDomainInstances = new javax.swing.JScrollPane();
+        jListDomainInstances = new javax.swing.JList<>();
+        jPanelObjects = new javax.swing.JPanel();
+        jLabelObjects = new javax.swing.JLabel();
+        jScrollPaneObjects = new javax.swing.JScrollPane();
+        jListObjects = new javax.swing.JList<>();
+        jPanelRangeInstances = new javax.swing.JPanel();
+        jLabelRangeInstances = new javax.swing.JLabel();
+        jScrollPaneRangeInstance = new javax.swing.JScrollPane();
+        jListRangeInstances = new javax.swing.JList<>();
 
-        jButtonNewClass.setText("New Class");
+        jButtonNewClass.setText("C");
         jButtonNewClass.setMargin(new java.awt.Insets(2, 2, 2, 2));
         jButtonNewClass.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -955,7 +1496,7 @@ public class EditorPanel extends javax.swing.JPanel {
             }
         });
 
-        jButtonNewProp.setText("New Prop");
+        jButtonNewProp.setText("P");
         jButtonNewProp.setMargin(new java.awt.Insets(2, 2, 2, 2));
         jButtonNewProp.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -1001,9 +1542,23 @@ public class EditorPanel extends javax.swing.JPanel {
         jCheckBoxSync.setSelected(true);
         jCheckBoxSync.setText("Sync");
 
-        jLabel1.setText("Prefix");
+        jLabel1.setText("Onto. Prefix");
 
         jLabelName.setText("Name");
+
+        jTextFieldFragment.setToolTipText("Fragment");
+
+        jButtonNewInstance.setText("I");
+        jButtonNewInstance.setMargin(new java.awt.Insets(2, 2, 2, 2));
+        jButtonNewInstance.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButtonNewInstanceActionPerformed(evt);
+            }
+        });
+
+        jLabelNamespace.setText("Inst. NS");
+
+        jLabelInstPrefix.setText("Inst. Prefix");
 
         javax.swing.GroupLayout jPanelTopLayout = new javax.swing.GroupLayout(jPanelTop);
         jPanelTop.setLayout(jPanelTopLayout);
@@ -1013,43 +1568,56 @@ public class EditorPanel extends javax.swing.JPanel {
                 .addContainerGap()
                 .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(jPanelTopLayout.createSequentialGroup()
-                        .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                            .addComponent(jLabelComment)
-                            .addComponent(jComboBoxLabelLang, javax.swing.GroupLayout.PREFERRED_SIZE, 72, javax.swing.GroupLayout.PREFERRED_SIZE))
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(jScrollPaneComment, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(0, 0, Short.MAX_VALUE))
-                    .addGroup(jPanelTopLayout.createSequentialGroup()
+                        .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jLabelLocalname)
+                            .addComponent(jLabelLabel)
+                            .addComponent(jCheckBoxSync))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addGroup(jPanelTopLayout.createSequentialGroup()
-                                .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                    .addComponent(jLabelLocalname)
-                                    .addComponent(jLabelLabel))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                                 .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                                     .addComponent(jTextFieldLabel, javax.swing.GroupLayout.Alignment.TRAILING)
                                     .addComponent(jTextFieldLocalname, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 243, javax.swing.GroupLayout.PREFERRED_SIZE))
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jLabelOntoURI)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                                .addComponent(jTextFieldOntoURI))
-                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanelTopLayout.createSequentialGroup()
-                                .addComponent(jCheckBoxSync)
+                                .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                    .addComponent(jLabelOntoURI)
+                                    .addComponent(jLabel1)))
+                            .addGroup(jPanelTopLayout.createSequentialGroup()
+                                .addComponent(jLabelType, javax.swing.GroupLayout.PREFERRED_SIZE, 127, javax.swing.GroupLayout.PREFERRED_SIZE)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jLabelType, javax.swing.GroupLayout.PREFERRED_SIZE, 75, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addComponent(jButtonNewClass, javax.swing.GroupLayout.PREFERRED_SIZE, 29, javax.swing.GroupLayout.PREFERRED_SIZE)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jButtonNewClass, javax.swing.GroupLayout.PREFERRED_SIZE, 84, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addComponent(jButtonNewProp, javax.swing.GroupLayout.PREFERRED_SIZE, 31, javax.swing.GroupLayout.PREFERRED_SIZE)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jButtonNewProp, javax.swing.GroupLayout.PREFERRED_SIZE, 84, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addComponent(jButtonNewInstance, javax.swing.GroupLayout.PREFERRED_SIZE, 31, javax.swing.GroupLayout.PREFERRED_SIZE)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jLabel1)
+                                .addComponent(jLabelName))))
+                    .addGroup(jPanelTopLayout.createSequentialGroup()
+                        .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                            .addComponent(jLabelComment)
+                            .addComponent(jComboBoxLabelLang, javax.swing.GroupLayout.PREFERRED_SIZE, 72, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(jScrollPaneComment, javax.swing.GroupLayout.PREFERRED_SIZE, 243, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jLabelNamespace)
+                            .addComponent(jLabelInstPrefix))))
+                .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(jPanelTopLayout.createSequentialGroup()
+                        .addGap(19, 19, 19)
+                        .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jTextFieldName)
+                            .addGroup(jPanelTopLayout.createSequentialGroup()
+                                .addComponent(jTextFieldOntoURI, javax.swing.GroupLayout.DEFAULT_SIZE, 71, Short.MAX_VALUE)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jTextFieldPrefix, javax.swing.GroupLayout.PREFERRED_SIZE, 56, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jLabelName)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jTextFieldName)))
-                        .addContainerGap())))
+                                .addComponent(jTextFieldFragment, javax.swing.GroupLayout.PREFERRED_SIZE, 24, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addComponent(jTextFieldPrefix)))
+                    .addGroup(jPanelTopLayout.createSequentialGroup()
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jTextFieldInstPrefix, javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addComponent(jTextFieldInstNS))))
+                .addContainerGap())
         );
         jPanelTopLayout.setVerticalGroup(
             jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -1059,32 +1627,51 @@ public class EditorPanel extends javax.swing.JPanel {
                     .addComponent(jButtonNewProp)
                     .addComponent(jButtonNewClass)
                     .addComponent(jCheckBoxSync)
-                    .addComponent(jLabel1)
-                    .addComponent(jTextFieldPrefix, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(jLabelName)
                     .addComponent(jTextFieldName, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(jLabelType, javax.swing.GroupLayout.PREFERRED_SIZE, 25, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(jLabelType, javax.swing.GroupLayout.PREFERRED_SIZE, 25, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jButtonNewInstance))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jTextFieldLocalname, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(jLabelLocalname)
                     .addComponent(jLabelOntoURI)
-                    .addComponent(jTextFieldOntoURI, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(jTextFieldOntoURI, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jTextFieldFragment, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(jLabelLabel)
+                    .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                        .addComponent(jLabel1)
+                        .addComponent(jTextFieldPrefix, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                     .addComponent(jTextFieldLabel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(jScrollPaneComment)
                     .addGroup(jPanelTopLayout.createSequentialGroup()
-                        .addComponent(jLabelComment)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(jComboBoxLabelLang, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                    .addComponent(jScrollPaneComment, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(jPanelTopLayout.createSequentialGroup()
+                                .addComponent(jLabelComment)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jComboBoxLabelLang, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addGroup(jPanelTopLayout.createSequentialGroup()
+                                .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                                    .addComponent(jLabelNamespace)
+                                    .addComponent(jTextFieldInstNS, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addGroup(jPanelTopLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                                    .addComponent(jLabelInstPrefix)
+                                    .addComponent(jTextFieldInstPrefix, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                        .addGap(0, 0, Short.MAX_VALUE)))
+                .addContainerGap())
         );
 
-        jPanelBottom.setLayout(new java.awt.GridLayout(1, 3));
+        jSplitPaneTboxAbox.setDividerLocation(300);
+        jSplitPaneTboxAbox.setDividerSize(8);
+        jSplitPaneTboxAbox.setOrientation(javax.swing.JSplitPane.VERTICAL_SPLIT);
+        jSplitPaneTboxAbox.setResizeWeight(1.0);
+
+        jPanelTBox.setLayout(new java.awt.GridLayout(1, 3));
 
         jLabelDomain.setText("Domain");
 
@@ -1103,7 +1690,7 @@ public class EditorPanel extends javax.swing.JPanel {
         jPanelDomain.setLayout(jPanelDomainLayout);
         jPanelDomainLayout.setHorizontalGroup(
             jPanelDomainLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jLabelDomain, javax.swing.GroupLayout.DEFAULT_SIZE, 206, Short.MAX_VALUE)
+            .addComponent(jLabelDomain, javax.swing.GroupLayout.DEFAULT_SIZE, 188, Short.MAX_VALUE)
             .addComponent(jTextFieldDomainFilter)
             .addComponent(jScrollPaneDomain)
         );
@@ -1114,11 +1701,11 @@ public class EditorPanel extends javax.swing.JPanel {
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jTextFieldDomainFilter, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPaneDomain, javax.swing.GroupLayout.DEFAULT_SIZE, 232, Short.MAX_VALUE)
+                .addComponent(jScrollPaneDomain, javax.swing.GroupLayout.DEFAULT_SIZE, 112, Short.MAX_VALUE)
                 .addGap(0, 0, 0))
         );
 
-        jPanelBottom.add(jPanelDomain);
+        jPanelTBox.add(jPanelDomain);
 
         jLabelProperties.setText("Properties");
 
@@ -1137,7 +1724,7 @@ public class EditorPanel extends javax.swing.JPanel {
         jPanelProperties.setLayout(jPanelPropertiesLayout);
         jPanelPropertiesLayout.setHorizontalGroup(
             jPanelPropertiesLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jLabelProperties, javax.swing.GroupLayout.DEFAULT_SIZE, 206, Short.MAX_VALUE)
+            .addComponent(jLabelProperties, javax.swing.GroupLayout.DEFAULT_SIZE, 188, Short.MAX_VALUE)
             .addComponent(jTextFieldPropertiesFilter)
             .addComponent(jScrollPaneProperties)
         );
@@ -1148,10 +1735,10 @@ public class EditorPanel extends javax.swing.JPanel {
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jTextFieldPropertiesFilter, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPaneProperties, javax.swing.GroupLayout.DEFAULT_SIZE, 232, Short.MAX_VALUE))
+                .addComponent(jScrollPaneProperties, javax.swing.GroupLayout.DEFAULT_SIZE, 112, Short.MAX_VALUE))
         );
 
-        jPanelBottom.add(jPanelProperties);
+        jPanelTBox.add(jPanelProperties);
 
         jLabelRange.setText("Range");
 
@@ -1170,7 +1757,7 @@ public class EditorPanel extends javax.swing.JPanel {
         jPanelRange.setLayout(jPanelRangeLayout);
         jPanelRangeLayout.setHorizontalGroup(
             jPanelRangeLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jLabelRange, javax.swing.GroupLayout.DEFAULT_SIZE, 206, Short.MAX_VALUE)
+            .addComponent(jLabelRange, javax.swing.GroupLayout.DEFAULT_SIZE, 188, Short.MAX_VALUE)
             .addComponent(jTextFieldRangeFilter)
             .addComponent(jScrollPaneRange)
         );
@@ -1181,24 +1768,109 @@ public class EditorPanel extends javax.swing.JPanel {
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jTextFieldRangeFilter, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPaneRange, javax.swing.GroupLayout.DEFAULT_SIZE, 232, Short.MAX_VALUE))
+                .addComponent(jScrollPaneRange, javax.swing.GroupLayout.DEFAULT_SIZE, 112, Short.MAX_VALUE))
         );
 
-        jPanelBottom.add(jPanelRange);
+        jPanelTBox.add(jPanelRange);
+
+        jSplitPaneTboxAbox.setLeftComponent(jPanelTBox);
+
+        jPanelABox.setLayout(new java.awt.GridLayout(1, 3));
+
+        jLabelDomainInstances.setText("Domain Instances");
+
+        jListDomainInstances.addKeyListener(new java.awt.event.KeyAdapter() {
+            public void keyPressed(java.awt.event.KeyEvent evt) {
+                jListDomainInstancesKeyPressed(evt);
+            }
+        });
+        jScrollPaneDomainInstances.setViewportView(jListDomainInstances);
+
+        javax.swing.GroupLayout jPanelSubjectsLayout = new javax.swing.GroupLayout(jPanelSubjects);
+        jPanelSubjects.setLayout(jPanelSubjectsLayout);
+        jPanelSubjectsLayout.setHorizontalGroup(
+            jPanelSubjectsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addComponent(jLabelDomainInstances, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+            .addComponent(jScrollPaneDomainInstances, javax.swing.GroupLayout.DEFAULT_SIZE, 188, Short.MAX_VALUE)
+        );
+        jPanelSubjectsLayout.setVerticalGroup(
+            jPanelSubjectsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanelSubjectsLayout.createSequentialGroup()
+                .addComponent(jLabelDomainInstances)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jScrollPaneDomainInstances, javax.swing.GroupLayout.DEFAULT_SIZE, 129, Short.MAX_VALUE))
+        );
+
+        jPanelABox.add(jPanelSubjects);
+
+        jLabelObjects.setText("Objects");
+
+        jListObjects.addKeyListener(new java.awt.event.KeyAdapter() {
+            public void keyPressed(java.awt.event.KeyEvent evt) {
+                jListObjectsKeyPressed(evt);
+            }
+        });
+        jScrollPaneObjects.setViewportView(jListObjects);
+
+        javax.swing.GroupLayout jPanelObjectsLayout = new javax.swing.GroupLayout(jPanelObjects);
+        jPanelObjects.setLayout(jPanelObjectsLayout);
+        jPanelObjectsLayout.setHorizontalGroup(
+            jPanelObjectsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addComponent(jLabelObjects, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+            .addComponent(jScrollPaneObjects, javax.swing.GroupLayout.DEFAULT_SIZE, 188, Short.MAX_VALUE)
+        );
+        jPanelObjectsLayout.setVerticalGroup(
+            jPanelObjectsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanelObjectsLayout.createSequentialGroup()
+                .addComponent(jLabelObjects)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jScrollPaneObjects, javax.swing.GroupLayout.DEFAULT_SIZE, 129, Short.MAX_VALUE))
+        );
+
+        jPanelABox.add(jPanelObjects);
+
+        jLabelRangeInstances.setText("Range Instances");
+
+        jListRangeInstances.setDragEnabled(true);
+        jListRangeInstances.addKeyListener(new java.awt.event.KeyAdapter() {
+            public void keyPressed(java.awt.event.KeyEvent evt) {
+                jListRangeInstancesKeyPressed(evt);
+            }
+        });
+        jScrollPaneRangeInstance.setViewportView(jListRangeInstances);
+
+        javax.swing.GroupLayout jPanelRangeInstancesLayout = new javax.swing.GroupLayout(jPanelRangeInstances);
+        jPanelRangeInstances.setLayout(jPanelRangeInstancesLayout);
+        jPanelRangeInstancesLayout.setHorizontalGroup(
+            jPanelRangeInstancesLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addComponent(jLabelRangeInstances, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+            .addComponent(jScrollPaneRangeInstance, javax.swing.GroupLayout.DEFAULT_SIZE, 188, Short.MAX_VALUE)
+        );
+        jPanelRangeInstancesLayout.setVerticalGroup(
+            jPanelRangeInstancesLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanelRangeInstancesLayout.createSequentialGroup()
+                .addComponent(jLabelRangeInstances)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jScrollPaneRangeInstance, javax.swing.GroupLayout.DEFAULT_SIZE, 129, Short.MAX_VALUE))
+        );
+
+        jPanelABox.add(jPanelRangeInstances);
+
+        jSplitPaneTboxAbox.setRightComponent(jPanelABox);
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addComponent(jPanelTop, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-            .addComponent(jPanelBottom, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+            .addComponent(jSplitPaneTboxAbox, javax.swing.GroupLayout.DEFAULT_SIZE, 566, Short.MAX_VALUE)
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
                 .addComponent(jPanelTop, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jPanelBottom, javax.swing.GroupLayout.DEFAULT_SIZE, 278, Short.MAX_VALUE))
+                .addComponent(jSplitPaneTboxAbox))
         );
     }// </editor-fold>//GEN-END:initComponents
 
@@ -1229,98 +1901,94 @@ public class EditorPanel extends javax.swing.JPanel {
     }//GEN-LAST:event_jTextAreaCommentKeyPressed
 
     private void jTreeDomainjTreeKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_jTreeDomainjTreeKeyPressed
-        if (evt.getKeyCode() == KeyEvent.VK_DELETE) {
-            JTree jtree = (JTree) evt.getSource();
-            TreePath selected = jtree.getSelectionPath();
-            if (selected != null) {
-                Object obj = selected.getLastPathComponent();
-                if (obj instanceof Resource) {
-                    Resource res = (Resource) obj;
-                    if (res == this.selected) {
-                        newResource(res.getType(), noevt());
-                    }
-                    if (res.getOntology() == getUserOntology() || res.isImported()) {
-                        removeResource(res, true);
-                    }
-                } else if (obj instanceof Ontology && obj != getUserOntology()) {
-                    fireEvents(OntologyTreeModel.Modification.Removed, obj);
-                    ontologies.remove((Ontology) obj);
-                }
-            }
-        }
+        removeResource(evt);
     }//GEN-LAST:event_jTreeDomainjTreeKeyPressed
 
     private void jTreePropertiesjTreeKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_jTreePropertiesjTreeKeyPressed
-        if (evt.getKeyCode() == KeyEvent.VK_DELETE) {
-            JTree jtree = (JTree) evt.getSource();
-            TreePath selected = jtree.getSelectionPath();
-            if (selected != null) {
-                Object obj = selected.getLastPathComponent();
-                if (obj instanceof Resource) {
-                    Resource res = (Resource) obj;
-                    if (res == this.selected) {
-                        newResource(res.getType(), noevt());
-                    }
-                    if (res.getOntology() == getUserOntology() || res.isImported()) {
-                        removeResource(res, true);
-                    }
-                } else if (obj instanceof Ontology && obj != getUserOntology()) {
-                    fireEvents(OntologyTreeModel.Modification.Removed, obj);
-                    ontologies.remove((Ontology) obj);
-                }
-            }
-        }
+        removeResource(evt);
     }//GEN-LAST:event_jTreePropertiesjTreeKeyPressed
 
     private void jTreeRangejTreeKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_jTreeRangejTreeKeyPressed
+        removeResource(evt);
+    }//GEN-LAST:event_jTreeRangejTreeKeyPressed
+
+    private void jButtonNewInstanceActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButtonNewInstanceActionPerformed
+        newResource(Resource.Type.Instance, evt);
+    }//GEN-LAST:event_jButtonNewInstanceActionPerformed
+
+    private void jListRangeInstancesKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_jListRangeInstancesKeyPressed
+        removeInstances(evt);
+    }//GEN-LAST:event_jListRangeInstancesKeyPressed
+
+    private void jListObjectsKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_jListObjectsKeyPressed
         if (evt.getKeyCode() == KeyEvent.VK_DELETE) {
-            JTree jtree = (JTree) evt.getSource();
-            TreePath selected = jtree.getSelectionPath();
-            if (selected != null) {
-                Object obj = selected.getLastPathComponent();
-                if (obj instanceof Resource) {
-                    Resource res = (Resource) obj;
-                    if (res == this.selected) {
-                        newResource(res.getType(), noevt());
-                    }
-                    if (res.getOntology() == getUserOntology() || res.isImported()) {
-                        removeResource(res, true);
-                    }
-                } else if (obj instanceof Ontology && obj != getUserOntology()) {
-                    fireEvents(OntologyTreeModel.Modification.Removed, obj);
-                    ontologies.remove((Ontology) obj);
+            JList jlist = (JList) evt.getSource();
+            
+            Resource subject = getSelectedDomainInstance();
+            Resource predicate = getSelectedProperty();
+            
+            if(subject != null && predicate != null) {
+                
+                for(Object obj : jlist.getSelectedValuesList()) {
+                    predicate.removeLink(subject, (Resource) obj);
                 }
+                
+                jlist.updateUI();
             }
         }
-    }//GEN-LAST:event_jTreeRangejTreeKeyPressed
+    }//GEN-LAST:event_jListObjectsKeyPressed
+
+    private void jListDomainInstancesKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_jListDomainInstancesKeyPressed
+        removeInstances(evt);
+    }//GEN-LAST:event_jListDomainInstancesKeyPressed
 
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton jButtonNewClass;
+    private javax.swing.JButton jButtonNewInstance;
     private javax.swing.JButton jButtonNewProp;
     private javax.swing.JCheckBox jCheckBoxSync;
     private javax.swing.JComboBox<String> jComboBoxLabelLang;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabelComment;
     private javax.swing.JLabel jLabelDomain;
+    private javax.swing.JLabel jLabelDomainInstances;
+    private javax.swing.JLabel jLabelInstPrefix;
     private javax.swing.JLabel jLabelLabel;
     private javax.swing.JLabel jLabelLocalname;
     private javax.swing.JLabel jLabelName;
+    private javax.swing.JLabel jLabelNamespace;
+    private javax.swing.JLabel jLabelObjects;
     private javax.swing.JLabel jLabelOntoURI;
     private javax.swing.JLabel jLabelProperties;
     private javax.swing.JLabel jLabelRange;
+    private javax.swing.JLabel jLabelRangeInstances;
     private javax.swing.JLabel jLabelType;
-    private javax.swing.JPanel jPanelBottom;
+    private javax.swing.JList<Resource> jListDomainInstances;
+    private javax.swing.JList<Resource> jListObjects;
+    private javax.swing.JList<Resource> jListRangeInstances;
+    private javax.swing.JPanel jPanelABox;
     private javax.swing.JPanel jPanelDomain;
+    private javax.swing.JPanel jPanelObjects;
     private javax.swing.JPanel jPanelProperties;
     private javax.swing.JPanel jPanelRange;
+    private javax.swing.JPanel jPanelRangeInstances;
+    private javax.swing.JPanel jPanelSubjects;
+    private javax.swing.JPanel jPanelTBox;
     private javax.swing.JPanel jPanelTop;
     private javax.swing.JScrollPane jScrollPaneComment;
     private javax.swing.JScrollPane jScrollPaneDomain;
+    private javax.swing.JScrollPane jScrollPaneDomainInstances;
+    private javax.swing.JScrollPane jScrollPaneObjects;
     private javax.swing.JScrollPane jScrollPaneProperties;
     private javax.swing.JScrollPane jScrollPaneRange;
+    private javax.swing.JScrollPane jScrollPaneRangeInstance;
+    private javax.swing.JSplitPane jSplitPaneTboxAbox;
     private javax.swing.JTextArea jTextAreaComment;
     private javax.swing.JTextField jTextFieldDomainFilter;
+    private javax.swing.JTextField jTextFieldFragment;
+    private javax.swing.JTextField jTextFieldInstNS;
+    private javax.swing.JTextField jTextFieldInstPrefix;
     private javax.swing.JTextField jTextFieldLabel;
     private javax.swing.JTextField jTextFieldLocalname;
     private javax.swing.JTextField jTextFieldName;
