@@ -672,6 +672,9 @@ public class EditorPanel extends javax.swing.JPanel {
                 
             } else {
                 String lbl = res.getLabel().get(getSelectedLanguage());
+                if(lbl == null) {
+                    lbl = res.getLocalname();
+                }
                 label.setText(lbl);
                 label.setIcon(instanceIcon);
             }
@@ -703,7 +706,13 @@ public class EditorPanel extends javax.swing.JPanel {
 
         private void render(Resource resource, JLabel label, JTree jtree) {
             if (resource.getType() == Resource.Type.Class) {
-                label.setText(resource.getLocalname(true));
+                
+                String extra = "";
+                if(!resource.getInstances().isEmpty()) {
+                    extra = " (" + resource.getInstances().size() + ")";
+                }
+                
+                label.setText(resource.getLocalname(true) + extra);
                 label.setIcon(classIcon);
             } else if (resource.getType() == Resource.Type.Property) {
                 StringBuilder sb = new StringBuilder();
@@ -737,6 +746,10 @@ public class EditorPanel extends javax.swing.JPanel {
                 
                 sb.append("</font>");
 
+                if(!resource.getLinks().isEmpty()) {
+                    sb.append(" (" + resource.getLinks().size() + ")");
+                }
+                
                 sb.append("</html>");
 
                 label.setText(sb.toString());

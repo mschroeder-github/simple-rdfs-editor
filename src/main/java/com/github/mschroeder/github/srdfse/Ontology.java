@@ -20,6 +20,8 @@ import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.Set;
 import org.apache.commons.io.FilenameUtils;
+import org.apache.jena.datatypes.RDFDatatype;
+import org.apache.jena.datatypes.TypeMapper;
 import org.apache.jena.rdf.model.Literal;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
@@ -27,6 +29,8 @@ import org.apache.jena.rdf.model.Property;
 import org.apache.jena.rdf.model.RDFNode;
 import org.apache.jena.rdf.model.ResourceFactory;
 import org.apache.jena.rdf.model.Statement;
+import org.apache.jena.shared.PrefixMapping;
+import org.apache.jena.shared.impl.PrefixMappingImpl;
 import org.apache.jena.vocabulary.OWL;
 import org.apache.jena.vocabulary.RDF;
 import org.apache.jena.vocabulary.RDFS;
@@ -52,6 +56,11 @@ public class Ontology {
 
     private List<Link> inverseOf;
     
+    private PrefixMapping prefixMapping;
+    
+    //filled by loadABox()
+    //private List<Statement> skippedABox;
+    
     public Ontology() {
         this.prefix = "";
         this.uri = "";
@@ -63,8 +72,16 @@ public class Ontology {
         rootClasses = new ArrayList<>();
         rootProperties = new ArrayList<>();
         inverseOf = new ArrayList<>();
+    
+        prefixMapping = new PrefixMappingImpl();
+        
+        //skippedABox = new ArrayList<>();
     }
 
+    public PrefixMapping getPrefixMapping() {
+        return prefixMapping;
+    }
+    
     public void addInverseOf(Resource source, Resource target) {
         inverseOf.add(new Link(source, target));
     }
@@ -234,6 +251,9 @@ public class Ontology {
     //from model to onto
     public static void loadTBox(Ontology onto, Model m) {
         Map<String, String> prefixMap = m.getNsPrefixMap();
+        
+        prefixMap.putAll(onto.prefixMapping.getNsPrefixMap());
+        
         //try find full uri in file
         String uri = prefixMap.get(onto.getPrefix());
         if (uri != null) {
@@ -275,9 +295,12 @@ public class Ontology {
         Set<Resource> rootClasses = new HashSet<>();
         Set<Resource> rootProps = new HashSet<>();
 
-        addResouces(m, RDFS.Class, Resource.Type.Class, onto, mapped, rootClasses, prefix2onto);
-        addResouces(m, RDFS.Datatype, Resource.Type.Datatype, onto, mapped, rootClasses, prefix2onto);
-        addResouces(m, RDF.Property, Resource.Type.Property, onto, mapped, rootProps, prefix2onto);
+        Map<String, String> nsMap = new HashMap<>();
+        prefixMap.forEach((a,b) -> nsMap.put(b,a));
+        
+        addResouces(m, RDFS.Class, Resource.Type.Class, onto, mapped, rootClasses, prefix2onto, nsMap);
+        addResouces(m, RDFS.Datatype, Resource.Type.Datatype, onto, mapped, rootClasses, prefix2onto, nsMap);
+        addResouces(m, RDF.Property, Resource.Type.Property, onto, mapped, rootProps, prefix2onto, nsMap);
 
         addRelations(m, RDFS.subClassOf, mapped, rootClasses, SpecialRelation.Sub);
         addRelations(m, RDFS.subPropertyOf, mapped, rootProps, SpecialRelation.Sub);
@@ -302,28 +325,35 @@ public class Ontology {
         
         Map<org.apache.jena.rdf.model.Resource, Resource> jena2res = new HashMap<>();
         
-        //types
+        //instances which have no type are ignored here
         for(Statement stmt : m.listStatements(null, RDF.type, (RDFNode) null).toList()) {
             if(!stmt.getObject().isResource())
                 continue;
             
+            if(stmt.getResource().equals(RDF.Property)) {
+                continue;
+            }
+            
             Resource clazz = uri2resource.get(stmt.getObject().asResource().getURI());
             if(clazz != null && clazz.getType() == Resource.Type.Class) {
                 
-                String ns = stmt.getSubject().getNameSpace();
+                String ns = getNameSpace(stmt.getSubject().getURI());
                 String instPrefix = m.getNsURIPrefix(ns);
                 if(instPrefix != null) {
                     onto.setInstanceNamespace(ns);
                     onto.setInstancePrefix(instPrefix);
                 }
                 
-                Resource inst = toResource(stmt.getSubject(), m, onto, Resource.Type.Instance, null);
+                Resource inst = toResource(stmt.getSubject(), m, onto, Resource.Type.Instance, null, m.getNsPrefixMap()); //TODO m.getNsPrefixMap()
                 clazz.addInstance(inst);
                 
                 jena2res.put(stmt.getSubject(), inst);
             }
         }
         
+        onto.listClasses().forEach(clazz -> clazz.getInstances().sort((a, b) -> a.getLocalname().compareTo(b.getLocalname())));
+        
+        //only the collected instances are iterated, without type is skipped
         //for all collected instances
         for(org.apache.jena.rdf.model.Resource jenaInstance : jena2res.keySet()) {
             
@@ -332,13 +362,21 @@ public class Ontology {
             for(Statement triple : m.listStatements(jenaInstance, null, (RDFNode) null).toList()) {
                 Resource prop = uri2resource.get(triple.getPredicate().getURI());
                 
-                if(prop == null)
+                if(prop == null) {
+                    //onto.skippedABox.add(triple);
                     continue;
+                }
                 
                 //literal case
                 if(triple.getObject().isLiteral()) {
+                    Literal lit = triple.getObject().asLiteral();
+                    
                     Resource literal = new Resource(onto, Resource.Type.Literal);
-                    literal.getComment().put("", triple.getObject().asLiteral().getLexicalForm());
+                    
+                    if(lit.getDatatypeURI() != null && !lit.getDatatypeURI().isEmpty() && !lit.getDatatypeURI().equals(XSD.xstring.getURI())) {
+                        literal.getComment().put("datatype", lit.getDatatypeURI());
+                    }
+                    literal.getComment().put("", lit.getLexicalForm());
                     
                     prop.addLink(subj, literal);
                     continue;
@@ -350,16 +388,21 @@ public class Ontology {
                 
                 Resource obj  = jena2res.get(triple.getObject().asResource());
                 
-                if(prop != null && obj != null) {
+                if(obj != null) {
                     prop.addLink(subj, obj);
                 }
             }
         }
     }
     
-    private static void addResouces(Model m, org.apache.jena.rdf.model.Resource typeResource, Resource.Type type, Ontology onto, Map<org.apache.jena.rdf.model.Resource, Resource> mapped, Set<Resource> roots, Map<String, Ontology> prefix2onto) {
+    private static void addResouces(Model m, org.apache.jena.rdf.model.Resource typeResource, Resource.Type type, Ontology onto, Map<org.apache.jena.rdf.model.Resource, Resource> mapped, Set<Resource> roots, Map<String, Ontology> prefix2onto, Map<String, String> nsMap) {
         for (org.apache.jena.rdf.model.Resource jena : m.listSubjectsWithProperty(RDF.type, typeResource).toList()) {
-            Resource res = toResource(jena, m, onto, type, prefix2onto);
+            //skip type
+            if(typeResource.equals(RDF.Property) && jena.equals(RDF.type)) {
+                continue;
+            }
+            
+            Resource res = toResource(jena, m, onto, type, prefix2onto, nsMap);
             roots.add(res);
             mapped.put(jena, res);
         }
@@ -382,9 +425,17 @@ public class Ontology {
                 o.addChild(s);
                 root.remove(s);
             } else if (special == SpecialRelation.Domain) {
-                s.setDomain(o);
+                if(s.hasDomain()) {
+                    s.getAdditionalDomainRangeStatements().add(stmt);
+                } else {
+                    s.setDomain(o);
+                }
             } else if (special == SpecialRelation.Range) {
-                s.setRange(o);
+                if(s.hasRange()) {
+                    s.getAdditionalDomainRangeStatements().add(stmt);
+                } else {
+                    s.setRange(o);
+                }
             }
         }
     }
@@ -395,9 +446,9 @@ public class Ontology {
         Range
     }
 
-    private static Resource toResource(org.apache.jena.rdf.model.Resource jenaRes, Model model, Ontology onto, Resource.Type type, Map<String, Ontology> prefix2onto) {
-        String prefix = model.getNsURIPrefix(jenaRes.getNameSpace());
-
+    private static Resource toResource(org.apache.jena.rdf.model.Resource jenaRes, Model model, Ontology onto, Resource.Type type, Map<String, Ontology> prefix2onto, Map<String, String> nsMap) {
+        String prefix = nsMap.get(getNameSpace(jenaRes.getURI()));
+        
         Ontology trgOnto = prefix2onto == null ? null : prefix2onto.get(prefix);
         if (trgOnto == null) {
             trgOnto = onto;
@@ -406,10 +457,10 @@ public class Ontology {
         Resource res = new Resource(trgOnto, type);
         res.setImported(trgOnto != onto);
 
-        String localname = jenaRes.getLocalName();
+        String localname = getLocalName(jenaRes.getURI());
         //sometimes getLocalName does not work; so fix it
         if (localname.isEmpty() && !trgOnto.getUri().isEmpty() && jenaRes.getURI().startsWith(trgOnto.getUri())) {
-            localname = jenaRes.getURI().substring(trgOnto.getUri().length());
+            localname = jenaRes.getURI().substring(trgOnto.getUriWithFragment().length());
         }
         res.setLocalname(localname);
 
@@ -595,6 +646,10 @@ public class Ontology {
                 if (r.hasRange()) {
                     m.add(jenaRes, RDFS.range, ResourceFactory.createResource(r.getRange().getURI()));
                 }
+                
+                for(Statement stmt : r.getAdditionalDomainRangeStatements()) {
+                    m.add(jenaRes, stmt.getPredicate(), stmt.getObject());
+                }
             }
             
             l.add(jenaRes);
@@ -643,6 +698,8 @@ public class Ontology {
         m.setNsPrefix("rdf", RDF.getURI());
         m.setNsPrefix("rdfs", RDFS.getURI());
         
+        //m.add(skippedABox);
+        
         for (List<Resource> l : Arrays.asList(rootClasses)) {
             for (Resource r : l) {
                 for (Resource clazz : r.descendants()) {
@@ -664,13 +721,24 @@ public class Ontology {
                     org.apache.jena.rdf.model.Property jenaProperty = ResourceFactory.createProperty(property.getURI());
                     
                     for(Link link : property.getLinks()) {
+                        
                         org.apache.jena.rdf.model.Resource jenaInstA = ResourceFactory.createResource(link.getSource().getURI());
                         
                         if(link.getTarget().getType() == Resource.Type.Literal) {
                             
-                            //untyped literal
                             String literalValue = link.getTarget().getLiteral().get("");
-                            m.add(jenaInstA, jenaProperty, literalValue);
+                            
+                            if(link.getTarget().getLiteral().containsKey("datatype")) {
+                                
+                                
+                                String datatypeURI = link.getTarget().getLiteral().get("datatype");
+                                RDFDatatype dt = TypeMapper.getInstance().getSafeTypeByName(datatypeURI);
+                                m.addLiteral(jenaInstA, jenaProperty, ResourceFactory.createTypedLiteral(literalValue, dt));
+                                
+                            } else {
+                                //untyped literal
+                                m.add(jenaInstA, jenaProperty, literalValue);
+                            }
                             
                         } else {
                             org.apache.jena.rdf.model.Resource jenaInstB = ResourceFactory.createResource(link.getTarget().getURI());
@@ -763,6 +831,19 @@ public class Ontology {
         return null;
     }
     
+    public List<Resource> listClasses() {
+        List<Resource> result = new ArrayList<>();
+        
+        for (List<Resource> l : Arrays.asList(rootClasses)) {
+            for (Resource r : l) {
+                for (Resource desc : r.descendants()) {
+                    result.add(desc);
+                }
+            }
+        }
+        return result;
+    }
+    
     public Resource findByUri(String uri) {
         for (List<Resource> l : Arrays.asList(rootClasses, rootProperties)) {
             for (Resource r : l) {
@@ -829,5 +910,30 @@ public class Ontology {
                 }
             }
         }
+    }
+    
+    /**
+     * Returns http://.../[localname] or http://...#[localname] of URI.
+     * @param uri
+     * @return 
+     */
+    public static String getLocalName(String uri) {
+        int a = uri.lastIndexOf("/");
+        int b = uri.lastIndexOf("#");
+        int m = Math.max(a, b);
+        if(m == -1)
+            return null;
+        
+        return uri.substring(m+1, uri.length());
+    }
+    
+    public static String getNameSpace(String uri) {
+        int a = uri.lastIndexOf("/");
+        int b = uri.lastIndexOf("#");
+        int m = Math.max(a, b);
+        if(m == -1)
+            return null;
+        
+        return uri.substring(0, m+1);
     }
 }

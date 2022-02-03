@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.github.mschroeder.github</groupId>
     <artifactId>simple-rdfs-editor</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
     <name>Simple RDFS Editor</name>
     <description>Editor to simply create RDFS based ontologies.</description>
@@ -48,7 +48,7 @@
         <dependency>
             <groupId>org.apache.jena</groupId>
             <artifactId>jena-core</artifactId>
-            <version>3.12.0</version>
+            <version>3.13.0</version>
         </dependency>
         
         <!-- web -->
@@ -63,7 +63,13 @@
             <version>2.7.1</version>
         </dependency>
         
-        
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13</version>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
     
     <build>

@@ -9,6 +9,7 @@ import java.util.Queue;
 import java.util.Set;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
+import org.apache.jena.rdf.model.Statement;
 import org.apache.jena.vocabulary.XSD;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -50,6 +51,8 @@ public class Resource implements Comparable<Resource> {
     
     private Resource domain;
     private Resource range;
+    private List<Statement> additionalDomainRangeStatements;
+    
     
     private String seeAlso;
     private String isDefinedBy;
@@ -65,6 +68,7 @@ public class Resource implements Comparable<Resource> {
         this.children = new ArrayList<>();
         this.instances = new ArrayList<>();
         this.links = new HashSet<>();
+        this.additionalDomainRangeStatements = new ArrayList<>();
     }
     
     /**
@@ -197,6 +201,10 @@ public class Resource implements Comparable<Resource> {
             return false;
         
         return getRange().getURI().startsWith(XSD.getURI());
+    }
+
+    public List<Statement> getAdditionalDomainRangeStatements() {
+        return additionalDomainRangeStatements;
     }
     
     public String getSeeAlso() {

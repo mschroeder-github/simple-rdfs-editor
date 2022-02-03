@@ -28,9 +28,8 @@ function splitCamelCase(str) {
     return str.replace(/([a-z](?=[A-Z]))/g, '$1 ').toLowerCase();
 }
 
-//TODO change to your server address
-//or use 'ws://' + location.host + '/websocket'
-var wsAddress = 'ws://173.212.240.179:8269/websocket';
+var wsAddress = 'ws://' + location.host + '/websocket';
+console.log(wsAddress);
 
 //init web socket
 Vue.use(VueNativeSock.default, wsAddress, {

@@ -133,7 +133,7 @@ public class Server {
 
     private Object postSession(Request req, Response resp) {
         String sessionId = RandomStringUtils.randomAlphanumeric(8);
-
+        
         EditorFrame editor = new EditorFrame();
         editor.getUserOntology().setPrefix(sessionId);
         editor.getUserOntology().setUri(serverHost + "/sessions/" + sessionId + "/"); //with ending '/'

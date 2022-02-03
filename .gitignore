@@ -28,3 +28,4 @@ hs_err_pid*
 simple-rdfs-editor-headless.sh
 deploy.sh
 nbactions.xml
+/nbproject/
