@@ -8,7 +8,7 @@ It is open-source, written in Java 8 and currently in the alpha phase.
 
 ## Online Version
 
-There is an online version running at http://srdfse.markus-projects.net/ .
+There was an online version running at http://srdfse.markus-projects.net/ (offline since 2022-02-03).
 It is implemented with [Vue.js](https://vuejs.org/), [Spark Java](http://sparkjava.com/) and Websockets.
 
 ![Screenshot](img/screenshot-online.png)
